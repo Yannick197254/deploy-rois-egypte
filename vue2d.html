@@ -192,80 +192,6 @@
 </style>
 </head>
 <body>
-<div id="auth-gate" style="position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#1B2A3A,#3a2a1a);display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Arial,sans-serif;">
-  <div style="background:#FBF6EA;border-radius:10px;padding:36px 40px;max-width:380px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.4);text-align:center;">
-    <h2 style="margin:0 0 6px;font-family:Georgia,serif;color:#1B2A3A;">𓂀 Rois d'Égypte antique</h2>
-    <p style="margin:0 0 20px;font-size:13px;color:#8B5E3C;">Accès réservé — connexion par code</p>
-    <div id="auth-step-email">
-      <input id="auth-email" type="email" placeholder="votre@email.com" style="width:100%;padding:10px;margin-bottom:12px;border:1px solid #d8cbb0;border-radius:5px;box-sizing:border-box;">
-      <button onclick="authEnvoyerCode()" style="width:100%;padding:10px;background:#1B2A3A;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:600;">Recevoir le code</button>
-    </div>
-    <div id="auth-step-code" style="display:none;">
-      <p style="font-size:12px;color:#4A3B2A;margin-bottom:10px;">Code envoyé à <strong id="auth-email-affiche"></strong></p>
-      <input id="auth-code" type="text" inputmode="numeric" maxlength="8" placeholder="12345678" style="width:100%;padding:10px;margin-bottom:12px;border:1px solid #d8cbb0;border-radius:5px;box-sizing:border-box;text-align:center;font-size:20px;letter-spacing:4px;">
-      <button onclick="authValiderCode()" style="width:100%;padding:10px;background:#1B2A3A;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:600;">Valider</button>
-      <button onclick="authRetour()" style="width:100%;padding:8px;background:none;border:none;color:#8B5E3C;cursor:pointer;font-size:12px;margin-top:6px;">← Changer d'adresse</button>
-    </div>
-    <p id="auth-message" style="margin-top:14px;font-size:12px;color:#a8432e;min-height:16px;"></p>
-  </div>
-</div>
-<button id="auth-logout" onclick="authDeconnexion()" style="display:none;position:fixed;bottom:14px;right:14px;z-index:9998;padding:8px 14px;background:#fff;border:1px solid #d8cbb0;border-radius:6px;font-size:12px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.15);">🔓 Se déconnecter</button>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script>
-  var AUTH_SB = supabase.createClient(
-    'https://bhrpzizmzzmobhqvbfal.supabase.co',
-    'sb_publishable_6KGYHMGBq1p1lXE9JZwgeA_MeFBTSqm'
-  );
-
-  function authAfficherMessage(txt){ document.getElementById('auth-message').textContent = txt || ''; }
-
-  async function authEnvoyerCode(){
-    const email = document.getElementById('auth-email').value.trim();
-    if(!email){ authAfficherMessage('Entrez votre email.'); return; }
-    authAfficherMessage('Envoi en cours...');
-    const { error } = await AUTH_SB.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
-    if(error){ authAfficherMessage('Erreur : ' + error.message); return; }
-    document.getElementById('auth-email-affiche').textContent = email;
-    document.getElementById('auth-step-email').style.display = 'none';
-    document.getElementById('auth-step-code').style.display = 'block';
-    authAfficherMessage('');
-  }
-
-  async function authValiderCode(){
-    const email = document.getElementById('auth-email').value.trim();
-    const token = document.getElementById('auth-code').value.trim();
-    if(!token){ authAfficherMessage('Entrez le code reçu.'); return; }
-    authAfficherMessage('Vérification...');
-    const { error } = await AUTH_SB.auth.verifyOtp({ email, token, type: 'email' });
-    if(error){ authAfficherMessage('Code invalide ou expiré.'); return; }
-    authMasquerGate();
-  }
-
-  function authRetour(){
-    document.getElementById('auth-step-code').style.display = 'none';
-    document.getElementById('auth-step-email').style.display = 'block';
-    authAfficherMessage('');
-  }
-
-  function authMasquerGate(){
-    document.getElementById('auth-gate').style.display = 'none';
-    document.getElementById('auth-logout').style.display = 'block';
-  }
-
-  async function authDeconnexion(){
-    await AUTH_SB.auth.signOut();
-    location.reload();
-  }
-
-  (async function authVerifierSession(){
-    const { data } = await AUTH_SB.auth.getSession();
-    if(data && data.session){
-      authMasquerGate();
-    }
-  })();
-</script>
-
 
 <div id="config-overlay" class="hidden">
   <div class="config-box">
@@ -391,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.11</span>
+  <span class="badge-version">v2.12</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1449,6 +1375,12 @@ function construireVueGraphique(){
     for (let g = Math.min(genA, genB); g <= Math.max(genA, genB); g++) {
       const intervalles = intervallesParGeneration.get(g) || [];
       if (intervalles.some(([a, b]) => x > a - PADDING && x < b + PADDING)) return true;
+      // Une colonne "libre de cases" peut quand même traverser le tronc
+      // d'une autre fratrie (un simple trait, pas une case) — à vérifier
+      // aussi, sinon le canal trouvé coupe en plein milieu un lien déjà
+      // posé au lieu de l'éviter.
+      const horizontaux = segmentsHorizontauxParCouloir.get(g) || [];
+      if (horizontaux.some(h => x > h.xFrom - PADDING && x < h.xTo + PADDING)) return true;
     }
     return false;
   };
