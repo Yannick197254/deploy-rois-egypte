@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.14</span>
+  <span class="badge-version">v2.15</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1476,24 +1476,54 @@ function construireVueGraphique(){
     return spanA - spanB;
   });
 
+  // Un groupe dont le tronc croiserait, à la hauteur par défaut, le
+  // connecteur VERTICAL d'un autre groupe déjà traité (ex. Hatchepsout/
+  // Néféroubity chevauchant celui de Touthmosis II vers ses parents) est
+  // décalé sur un palier de hauteur légèrement différent — un vrai
+  // décalage vertical local, pas un simple saut en arc (qui devient vite
+  // illisible dès que plusieurs fratries se chevauchent à la même
+  // hauteur) et pas un routage par la marge (inutile ici, le croisement
+  // se résout sur place). Le saut en arc et le routage par la marge
+  // restent le filet de sécurité pour les cas qu'aucun palier ne résout.
+  const croiseHorizontalVertical = (x1, x2, laneY, gap) => {
+    const xMin = Math.min(x1, x2), xMax = Math.max(x1, x2);
+    return (segmentsVerticauxParCouloir.get(gap) || [])
+      .some(s => s.yFrom <= laneY && laneY <= s.yTo && s.x > xMin + 8 && s.x < xMax - 8);
+  };
+  const PALIERS_NORMAL = [0.5, 0.33, 0.67];
+  const PALIERS_PONT = [FRACTION_VOIE_PONT, 0.6, 0.84];
+
   const aPromouvoir = [];
   const traitesLocalement = [];
   groupesOrdonnes.forEach(groupe => {
     const c0 = groupe[0];
-    const laneY = hautCouloir(c0.gapDebut) + (basCouloir(c0.gapDebut) - hautCouloir(c0.gapDebut)) * (c0.estPont ? FRACTION_VOIE_PONT : FRACTION_VOIE_NORMALE);
     const xMinGroupe = Math.min(c0.x1, ...groupe.map(c => c.x2));
     const xMaxGroupe = Math.max(c0.x1, ...groupe.map(c => c.x2));
+    const paliers = c0.estPont ? PALIERS_PONT : PALIERS_NORMAL;
+
+    let laneYRetenu = null, croiseMemeAuMeilleurPalier = false;
+    for (let i = 0; i < paliers.length; i++) {
+      const laneYTest = hautCouloir(c0.gapDebut) + (basCouloir(c0.gapDebut) - hautCouloir(c0.gapDebut)) * paliers[i];
+      const croiseVertBloquant = groupe.some(c =>
+        croiseQuelqueChose(xMinGroupe, c.y1, xMaxGroupe, c.y1, laneYTest, c.gapDebut) ||
+        croiseQuelqueChose(c.x1, c.y1, c.x2, c.y2, laneYTest, c.gapDebut)
+      );
+      if (croiseVertBloquant) continue; // ce palier ne résout pas le cas vraiment bloquant, inutile de le garder
+      const croiseHoriz = croiseHorizontalVertical(xMinGroupe, xMaxGroupe, laneYTest, c0.gapDebut);
+      if (!croiseHoriz) { laneYRetenu = laneYTest; break; } // palier propre, aucun croisement du tout
+      if (laneYRetenu === null) { laneYRetenu = laneYTest; croiseMemeAuMeilleurPalier = true; } // à défaut, on garde ce palier (saut en arc gérera le reste)
+    }
+
     // Le groupe croise quelque chose si son enveloppe globale (du tronc
     // commun jusqu'au plus lointain des enfants) croise un lien déjà
     // posé, OU si l'un des enfants pris individuellement croise quelque
-    // chose (cas d'un lien déjà posé qui coupe pile sa branche finale).
-    const croise = groupe.some(c =>
-      croiseQuelqueChose(xMinGroupe, c.y1, xMaxGroupe, c.y1, laneY, c.gapDebut) ||
-      croiseQuelqueChose(c.x1, c.y1, c.x2, c.y2, laneY, c.gapDebut)
-    );
-    if (croise) {
+    // chose (cas d'un lien déjà posé qui coupe pile sa branche finale) —
+    // et ce, même au meilleur palier essayé : c'est alors un vrai
+    // croisement bloquant, à router par la marge.
+    if (laneYRetenu === null) {
       groupe.forEach(c => aPromouvoir.push(c));
     } else {
+      const laneY = laneYRetenu;
       // Gardé sur sa voie locale : on enregistre tout de suite l'empreinte
       // de chaque enfant (2 verticaux + 1 horizontal), pour que le
       // prochain groupe traité dans ce même couloir en tienne compte.
