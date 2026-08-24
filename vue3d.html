@@ -948,6 +948,11 @@ function build3DTree(personnes, mariages, filiations) {
 
   const generations = Object.keys(byGen).map(Number).sort((a, b) => a - b);
   const positions = {}; // id -> {x,y,z}
+  const pontStub = {}; // "ancreId|conjointId" -> {x,y,z} : point de sortie réservé sur le cercle
+                        // de l'ancre, même pour un conjoint positionné ailleurs (pont) — sert à
+                        // faire partir le trait de mariage dans la bonne direction avant qu'il
+                        // ne se courbe vers la position réelle, plus lisible que d'aller tout
+                        // droit à travers toute la scène.
 
   generations.forEach((g, gi) => {
     const rowIds = byGen[g];
@@ -1126,10 +1131,15 @@ function build3DTree(personnes, mariages, filiations) {
         // apparaître physiquement à cet endroit précis.
         const tousLesConjoints = spousesOf[cid] || [];
         const nTousConjoints = tousLesConjoints.length || 1;
+        const outR = group.radius + SPOUSE_ORBIT;
+        tousLesConjoints.forEach(sid => {
+          const wi = tousLesConjoints.indexOf(sid);
+          const angleCible = angle + (2 * Math.PI * wi) / nTousConjoints;
+          pontStub[cid + '|' + sid] = { x: cx + outR * Math.cos(angleCible), y, z: cz + outR * Math.sin(angleCible) };
+        });
         const epousesAPlacer = tousLesConjoints.filter(sid => nonBloodRow.includes(sid) && !positions[sid]);
         epousesAPlacer.forEach(sid => {
           const wi = tousLesConjoints.indexOf(sid);
-          const outR = group.radius + SPOUSE_ORBIT;
           const angleCible = angle + (2 * Math.PI * wi) / nTousConjoints;
           const spouseAngle = bestAngle(ANGLE_OFFSETS.map(off => angleCible + off), cx, cz, outR, group.key, angleCible);
           positions[sid] = { x: cx + outR * Math.cos(spouseAngle), y, z: cz + outR * Math.sin(spouseAngle) };
@@ -1274,10 +1284,13 @@ function build3DTree(personnes, mariages, filiations) {
   unknownNodes.forEach(u => { unknownById[u.key] = u; });
 
   function lineBetween(a, b, color, dashed, ids, opacity) {
-    const geo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(a.x, a.y, a.z),
-      new THREE.Vector3(b.x, b.y, b.z),
-    ]);
+    return lineBetweenPath([a, b], color, dashed, ids, opacity);
+  }
+
+  function lineBetweenPath(points, color, dashed, ids, opacity) {
+    const geo = new THREE.BufferGeometry().setFromPoints(
+      points.map(p => new THREE.Vector3(p.x, p.y, p.z))
+    );
     const defaultOpacity = opacity ?? 0.85;
     let line;
     if (dashed) {
@@ -1300,7 +1313,20 @@ function build3DTree(personnes, mariages, filiations) {
     drawnMarriages.add(key);
     const p1 = positions[m.personne_1_id], p2 = positions[m.personne_2_id];
     if (!p1 || !p2) return;
-    lineBetween(p1, p2, 0x7A2E2E, false, new Set([m.personne_1_id, m.personne_2_id]));
+    // Si l'un des deux conjoints a un point de sortie réservé (son créneau
+    // sur le cercle de l'autre) mais ne s'y trouve pas physiquement — cas
+    // d'un conjoint positionné plutôt près de sa propre famille de sang —
+    // le trait part d'abord dans la bonne direction réservée avant de se
+    // courber vers sa position réelle, plutôt qu'une ligne droite d'un
+    // bout à l'autre de la scène (bien moins lisible).
+    const stub1 = pontStub[m.personne_2_id + '|' + m.personne_1_id]; // sortie réservée pour p1, vue depuis p2
+    const stub2 = pontStub[m.personne_1_id + '|' + m.personne_2_id]; // sortie réservée pour p2, vue depuis p1
+    const loin = (s, p) => s && (Math.abs(s.x - p.x) > 0.05 || Math.abs(s.z - p.z) > 0.05);
+    let points;
+    if (loin(stub2, p2)) points = [p1, stub2, p2];
+    else if (loin(stub1, p1)) points = [p2, stub1, p1];
+    else points = [p1, p2];
+    lineBetweenPath(points, 0x7A2E2E, false, new Set([m.personne_1_id, m.personne_2_id]));
     const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 + 0.45, z: (p1.z + p2.z) / 2 };
     const label = m.ordre ? (m.ordre === 1 ? '1er mariage' : m.ordre + 'e mariage') : '';
     if (label) addMarriageLabel(label, mid);
