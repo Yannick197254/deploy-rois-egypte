@@ -64,7 +64,7 @@
   #vueGraphique .lien-mariage{ stroke:#c0392b; stroke-width:4; }
   #vueGraphique .lien-mariage-decale{ stroke-dasharray:4,3; }
   #vueGraphique .lien-filiation{ stroke:#2e7d32; stroke-width:1.6; fill:none; }
-  #vueGraphique .lien-filiation.lien-pont-profond{ stroke:#b8860b; stroke-dasharray:5,3; }
+  #vueGraphique .lien-filiation.lien-pont-profond{ stroke:#b8860b; }
   #vueGraphique .lien-filiation.lien-incertain{ stroke:#a8432e; stroke-dasharray:5,3; }
   #vueGraphique .etiquette-generation{ font-size:11px; fill:#9a9484; font-weight:600; }
 
@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.12</span>
+  <span class="badge-version">v2.13</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1264,7 +1264,7 @@ function construireVueGraphique(){
 
   const tousConnecteurs = [];
   const filiationDe = new Map(); // enfantId -> {pere, mere}
-  FILIATIONS.forEach(f => filiationDe.set(f.enfant, { pere: f.pere, mere: f.mere, incertain: !!(f.pereIncertain || f.mereIncertaine) }));
+  FILIATIONS.forEach(f => filiationDe.set(f.enfant, { pere: f.pere, mere: f.mere, incertain: !!(f.pereIncertain || f.mereIncertaine || !f.pere || !f.mere) }));
   unionsPlacees.forEach(u => {
     u.membres.forEach(m => {
       const uidParent = unionParentDe.get(m);
