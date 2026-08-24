@@ -1,0 +1,1767 @@
+<!DOCTYPE html>
+<!--
+  © Origines — Tous droits réservés.
+  Cette application et son code sont une création originale d'Origines.
+  Toute reproduction, copie ou redistribution de ce fichier sans
+  autorisation est interdite.
+-->
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rois d'Égypte — Encodage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --parchemin: #F2E9D8;
+    --papier: #FBF7ED;
+    --encre: #241D18;
+    --noyer: #6B4F3B;
+    --bordeaux: #7A2E2E;
+    --sauge: #4B6350;
+    --laiton: #B08D3E;
+    --gris-texte: #4A4438;
+  }
+
+  * { box-sizing: border-box; }
+
+  #config-overlay, #arbres-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(36, 29, 24, 0.92);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+  }
+  #config-overlay.hidden, #arbres-overlay.hidden { display: none; }
+  .config-box {
+    background: var(--papier);
+    border-radius: 10px;
+    padding: 32px;
+    max-width: 460px;
+    width: 100%;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+  }
+  .config-box h2 {
+    font-family: 'Playfair Display', serif;
+    color: var(--encre);
+    margin: 0 0 6px;
+  }
+  .config-box p {
+    font-size: 14px;
+    color: var(--gris-texte);
+    margin: 0 0 18px;
+    line-height: 1.5;
+  }
+  .config-box label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin: 14px 0 4px;
+    color: var(--encre);
+  }
+  .config-box input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d8cbb0;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+  }
+  .config-box .config-actions {
+    margin-top: 22px;
+    display: flex;
+    gap: 10px;
+  }
+  .config-box .status {
+    margin-top: 12px;
+    font-size: 13px;
+  }
+  .config-box .status.error { color: var(--bordeaux); }
+  .config-box .status.ok { color: var(--sauge); }
+  #config-gear, .link-btn {
+    background: none;
+    border: none;
+    color: var(--laiton);
+    cursor: pointer;
+    font-size: 13px;
+    text-decoration: underline;
+    padding: 0;
+  }
+
+  .arbre-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid #e8dcc4;
+  }
+  .arbre-item:last-child { border-bottom: none; }
+  .arbre-item.actif { background: rgba(176,141,62,0.06); margin: 0 -14px; padding: 12px 14px; border-radius: 6px; }
+  .arbre-info strong { color: var(--encre); }
+  .arbre-url { font-size: 11px; color: var(--gris-texte); word-break: break-all; margin-top: 2px; }
+  .arbre-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .tag-actif {
+    background: var(--sauge); color: #fff; font-size: 10px; text-transform: uppercase;
+    padding: 1px 7px; border-radius: 8px; font-weight: 700; letter-spacing: 0.3px;
+  }
+  .btn.small { padding: 4px 10px; font-size: 12px; }
+
+  .aide-steps {
+    counter-reset: step;
+    padding: 0;
+    margin: 0 0 20px;
+    list-style: none;
+  }
+  .aide-steps li {
+    counter-increment: step;
+    position: relative;
+    padding: 0 0 18px 40px;
+    line-height: 1.5;
+  }
+  .aide-steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--noyer);
+    color: var(--papier);
+    font-weight: 600;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .aide-steps a { color: var(--bordeaux); }
+  .code-block-wrap { position: relative; margin: 10px 0 4px; }
+  .code-block {
+    background: var(--encre);
+    color: #e6ddc9;
+    padding: 16px;
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 12.5px;
+    line-height: 1.5;
+    max-height: 320px;
+    overflow: auto;
+    white-space: pre;
+  }
+  .copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: var(--laiton);
+    color: var(--encre);
+    border: none;
+    border-radius: 5px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .copy-btn:hover { opacity: 0.9; }
+
+  footer.site-credit {
+    text-align: center;
+    padding: 14px 12px;
+    font-size: 11px;
+    color: var(--noyer);
+    opacity: 0.75;
+  }
+
+  body {
+    margin: 0;
+    background: var(--parchemin);
+    background-image:
+      radial-gradient(circle at 8% 8%, rgba(176,141,62,0.10), transparent 40%),
+      radial-gradient(circle at 92% 92%, rgba(75,99,80,0.08), transparent 40%);
+    font-family: 'Inter', sans-serif;
+    color: var(--gris-texte);
+    min-height: 100vh;
+  }
+
+  .top-bar {
+    position: sticky;
+    top: 0;
+    z-index: 200;
+  }
+
+  header {
+    background: var(--encre);
+    padding: 28px 32px 22px;
+    border-bottom: 4px solid var(--laiton);
+  }
+  header h1 {
+    font-family: 'Playfair Display', serif;
+    color: var(--parchemin);
+    font-size: 26px;
+    margin: 0 0 4px;
+    letter-spacing: 0.3px;
+  }
+
+  header p {
+    color: var(--laiton);
+    margin: 0;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  nav {
+    display: flex;
+    gap: 4px;
+    padding: 0 32px;
+    background: #382D24;
+    flex-wrap: wrap;
+  }
+
+  nav button {
+    background: transparent;
+    border: none;
+    color: rgba(242,233,216,0.65);
+    padding: 14px 18px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.15s ease;
+  }
+
+  nav button:hover { color: #fff; }
+
+  nav button.active {
+    color: #fff;
+    border-bottom-color: var(--laiton);
+  }
+
+  main {
+    max-width: 1700px;
+    margin: 0 auto;
+    padding: 14px 32px 32px;
+  }
+
+  .personnes-layout {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 20px;
+    align-items: stretch;
+  }
+  @media (max-width: 1100px) {
+    .personnes-layout { grid-template-columns: 1fr; }
+  }
+  /* La carte "Ajouter une personne" occupe 1/3 de la largeur : sa grille
+     de champs repasse à 2 colonnes pour que tout reste lisible, au lieu
+     des 5 colonnes utilisées ailleurs sur une pleine largeur. */
+  .personne-form-narrow .form-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  /* La carte "Liste des personnes" est étirée à la même hauteur que le
+     formulaire (grâce à align-items: stretch ci-dessus) ; sa table
+     remplit cette hauteur et défile en interne plutôt que d'être limitée
+     à une hauteur fixe indépendante. */
+  .personnes-liste-card {
+    display: flex;
+    flex-direction: column;
+  }
+  .personnes-liste-card .table-scroll {
+    flex: 1 1 auto;
+    max-height: none;
+  }
+
+  .sticky-form {
+    position: sticky;
+    top: calc(var(--topbar-h, 130px) + 12px);
+    z-index: 5;
+  }
+
+  .table-scroll {
+    max-height: 480px;
+    overflow-y: auto;
+    border-radius: 4px;
+  }
+  .table-scroll table { margin: 0; }
+  .table-scroll thead th {
+    position: sticky;
+    top: 0;
+    background: var(--papier);
+    z-index: 1;
+  }
+
+  .tab { display: none; }
+  .tab.active { display: block; }
+
+  .card {
+    background: var(--papier);
+    border: 1px solid rgba(107,79,59,0.25);
+    border-radius: 6px;
+    padding: 18px 24px;
+    margin-bottom: 18px;
+    box-shadow: 0 2px 6px rgba(36,29,24,0.06);
+  }
+
+  .card h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 19px;
+    color: var(--encre);
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--laiton);
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+  }
+  @media (max-width: 1100px) {
+    .form-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  }
+
+  .field { display: flex; flex-direction: column; gap: 5px; }
+
+  .field.full { grid-column: 1 / -1; }
+
+  label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--noyer);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  input, select, textarea {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    padding: 7px 10px;
+    border: 1px solid rgba(107,79,59,0.35);
+    border-radius: 4px;
+    background: #fff;
+    color: var(--encre);
+  }
+
+  input:focus, select:focus, textarea:focus {
+    outline: 2px solid var(--sauge);
+    outline-offset: 1px;
+  }
+
+  textarea { resize: vertical; min-height: 50px; }
+
+  .actions { display: flex; gap: 10px; margin-top: 18px; }
+
+  button.btn {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 10px 18px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+  }
+
+  .btn-primary { background: var(--sauge); color: #fff; }
+  .btn-secondary { background: transparent; color: var(--noyer); border: 1px solid var(--noyer); }
+  .btn-danger { background: var(--bordeaux); color: #fff; }
+  .btn.small { padding: 5px 10px; font-size: 12px; }
+  button.btn:hover { opacity: 0.85; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid rgba(107,79,59,0.18); }
+  th {
+    font-family: 'Inter', sans-serif;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.4px;
+    color: var(--noyer);
+  }
+  tr:hover td { background: rgba(176,141,62,0.08); }
+
+  .tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+  }
+  .tag-homme { background: rgba(75,99,80,0.18); color: var(--sauge); }
+  .tag-femme { background: rgba(122,46,46,0.15); color: var(--bordeaux); }
+  .tag-inconnu { background: rgba(74,68,56,0.12); color: var(--gris-texte); }
+
+  .empty { color: rgba(74,68,56,0.5); font-style: italic; padding: 12px 0; }
+  .status { font-size: 13px; margin-top: 10px; min-height: 18px; }
+  .status.error { color: var(--bordeaux); }
+  .status.ok { color: #2E6B3E; }
+
+  .row-actions { display: flex; gap: 6px; }
+  .hint-text { font-size: 12px; color: rgba(74,68,56,0.7); margin: -8px 0 14px; }
+
+  .personnes-actions-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  .personnes-actions-row input {
+    max-width: 260px;
+    padding: 8px 12px;
+    border: 1px solid #d8cbb0;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 13px;
+  }
+
+  .th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+  .th-sort:hover { color: var(--laiton); }
+  .sort-arrow { font-size: 10px; margin-left: 3px; color: var(--laiton); }
+</style>
+</head>
+<body>
+<div id="auth-gate" style="position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#1B2A3A,#3a2a1a);display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Arial,sans-serif;">
+  <div style="background:#FBF6EA;border-radius:10px;padding:36px 40px;max-width:380px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.4);text-align:center;">
+    <h2 style="margin:0 0 6px;font-family:Georgia,serif;color:#1B2A3A;">𓂀 Rois d'Égypte antique</h2>
+    <p style="margin:0 0 20px;font-size:13px;color:#8B5E3C;">Accès réservé — connexion par code</p>
+    <div id="auth-step-email">
+      <input id="auth-email" type="email" placeholder="votre@email.com" style="width:100%;padding:10px;margin-bottom:12px;border:1px solid #d8cbb0;border-radius:5px;box-sizing:border-box;">
+      <button onclick="authEnvoyerCode()" style="width:100%;padding:10px;background:#1B2A3A;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:600;">Recevoir le code</button>
+    </div>
+    <div id="auth-step-code" style="display:none;">
+      <p style="font-size:12px;color:#4A3B2A;margin-bottom:10px;">Code envoyé à <strong id="auth-email-affiche"></strong></p>
+      <input id="auth-code" type="text" inputmode="numeric" maxlength="6" placeholder="123456" style="width:100%;padding:10px;margin-bottom:12px;border:1px solid #d8cbb0;border-radius:5px;box-sizing:border-box;text-align:center;font-size:20px;letter-spacing:4px;">
+      <button onclick="authValiderCode()" style="width:100%;padding:10px;background:#1B2A3A;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:600;">Valider</button>
+      <button onclick="authRetour()" style="width:100%;padding:8px;background:none;border:none;color:#8B5E3C;cursor:pointer;font-size:12px;margin-top:6px;">← Changer d'adresse</button>
+    </div>
+    <p id="auth-message" style="margin-top:14px;font-size:12px;color:#a8432e;min-height:16px;"></p>
+  </div>
+</div>
+<button id="auth-logout" onclick="authDeconnexion()" style="display:none;position:fixed;bottom:14px;right:14px;z-index:9998;padding:8px 14px;background:#fff;border:1px solid #d8cbb0;border-radius:6px;font-size:12px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.15);">🔓 Se déconnecter</button>
+
+<script>
+  var AUTH_SB = supabase.createClient(
+    'https://bhrpzizmzzmobhqvbfal.supabase.co',
+    'sb_publishable_6KGYHMGBq1p1lXE9JZwgeA_MeFBTSqm'
+  );
+
+  function authAfficherMessage(txt){ document.getElementById('auth-message').textContent = txt || ''; }
+
+  async function authEnvoyerCode(){
+    const email = document.getElementById('auth-email').value.trim();
+    if(!email){ authAfficherMessage('Entrez votre email.'); return; }
+    authAfficherMessage('Envoi en cours...');
+    const { error } = await AUTH_SB.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+    if(error){ authAfficherMessage('Erreur : ' + error.message); return; }
+    document.getElementById('auth-email-affiche').textContent = email;
+    document.getElementById('auth-step-email').style.display = 'none';
+    document.getElementById('auth-step-code').style.display = 'block';
+    authAfficherMessage('');
+  }
+
+  async function authValiderCode(){
+    const email = document.getElementById('auth-email').value.trim();
+    const token = document.getElementById('auth-code').value.trim();
+    if(!token){ authAfficherMessage('Entrez le code reçu.'); return; }
+    authAfficherMessage('Vérification...');
+    const { error } = await AUTH_SB.auth.verifyOtp({ email, token, type: 'email' });
+    if(error){ authAfficherMessage('Code invalide ou expiré.'); return; }
+    authMasquerGate();
+  }
+
+  function authRetour(){
+    document.getElementById('auth-step-code').style.display = 'none';
+    document.getElementById('auth-step-email').style.display = 'block';
+    authAfficherMessage('');
+  }
+
+  function authMasquerGate(){
+    document.getElementById('auth-gate').style.display = 'none';
+    document.getElementById('auth-logout').style.display = 'block';
+  }
+
+  async function authDeconnexion(){
+    await AUTH_SB.auth.signOut();
+    location.reload();
+  }
+
+  (async function authVerifierSession(){
+    const { data } = await AUTH_SB.auth.getSession();
+    if(data && data.session){
+      authMasquerGate();
+    }
+  })();
+</script>
+
+
+<div id="config-overlay" class="hidden">
+  <div class="config-box" style="position:relative;">
+    <button onclick="closeConfig()" aria-label="Fermer"
+      style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:20px;line-height:1;cursor:pointer;color:var(--gris-texte);">×</button>
+    <h2>🌿 Connexion à votre base</h2>
+    <p>Cette application stocke vos données dans votre propre projet Supabase (gratuit). Entrez ici l'URL et la clé « publishable » de votre projet.</p>
+    <p style="font-size:12px;">Pas encore de projet ? Fermez cette fenêtre et consultez l'onglet <strong>« Mode d'emploi »</strong> ci-dessus pour le guide complet et le script SQL à copier.</p>
+    <label for="cfg-url">URL du projet Supabase</label>
+    <input type="text" id="cfg-url" placeholder="https://xxxxxxxx.supabase.co" oninput="saveConfigDraft()">
+    <label for="cfg-key">Clé publishable (anon)</label>
+    <input type="text" id="cfg-key" placeholder="sb_publishable_..." oninput="saveConfigDraft()">
+    <div class="config-actions">
+      <button class="btn btn-primary" onclick="saveConfig()">Se connecter</button>
+    </div>
+    <div class="status" id="config-status"></div>
+  </div>
+</div>
+
+<div id="arbres-overlay" class="hidden">
+  <div class="config-box" style="position:relative; max-width:520px;">
+    <button onclick="closeArbres()" aria-label="Fermer"
+      style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:20px;line-height:1;cursor:pointer;color:var(--gris-texte);">×</button>
+    <h2>🌳 Mes arbres</h2>
+    <p>Les arbres auxquels vous vous êtes déjà connecté·e sur <strong>ce navigateur</strong>. Cliquez sur « Utiliser » pour basculer instantanément de l'un à l'autre.</p>
+    <div id="arbres-list"></div>
+    <p class="hint-text" style="margin-top:16px;">Pas de limite ici : autant d'arbres que vous voulez peuvent être mémorisés. La seule limite vient de <strong>Supabase</strong> lui-même — un compte gratuit permet 2 projets actifs (voir le mode d'emploi, section 6, pour les détails et solutions).</p>
+  </div>
+</div>
+
+<div class="top-bar">
+<header>
+  <h1>𓂀 Rois d'Égypte antique</h1>
+  <p>Interface d'encodage · v2.00 &nbsp;·&nbsp; <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button> &nbsp;·&nbsp; <button class="link-btn" onclick="openConfig()">⚙ Changer de connexion</button> &nbsp;·&nbsp; <button class="link-btn" onclick="exportToExcel()">💾 Sauvegarder en Excel</button> &nbsp;·&nbsp; <button class="link-btn" id="btn-import" onclick="document.getElementById('import-file').click()">📥 Importer depuis Excel</button> &nbsp;·&nbsp; <a class="link-btn" href="vue3d.html" style="text-decoration:underline;">🌳 Vue 3D</a> &nbsp;·&nbsp; <a class="link-btn" href="vue2d.html" style="text-decoration:underline;">📐 Vue 2D</a></p>
+  <input type="file" id="import-file" accept=".xlsx" style="display:none;" onchange="importFromExcel(this.files[0])">
+</header>
+
+<nav>
+  <button class="tab-btn active" data-tab="personnes">Personnes</button>
+  <button class="tab-btn" data-tab="mariages">Mariages</button>
+  <button class="tab-btn" data-tab="filiations">Filiations</button>
+  <button class="tab-btn" data-tab="aide">Mode d'emploi</button>
+</nav>
+</div>
+
+<main>
+
+  <section id="tab-personnes" class="tab active">
+    <div class="personnes-layout">
+    <div class="card sticky-form personne-form-narrow">
+      <h2 id="personne-form-title">Ajouter une personne</h2>
+      <input type="hidden" id="personne-id">
+      <div class="form-grid">
+        <div class="field">
+          <label>Nom usuel *</label>
+          <input type="text" id="p-nom_usuel" placeholder="ex : Ramsès II">
+        </div>
+        <div class="field">
+          <label>Rôle *</label>
+          <select id="p-role" onchange="majAffichageChampsRole()">
+            <option value="roi">Roi / Pharaon</option>
+            <option value="femme">Femme</option>
+            <option value="enfant">Enfant</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Sexe</label>
+          <select id="p-sexe">
+            <option value="">— non précisé —</option>
+            <option value="Homme">Homme</option>
+            <option value="Femme">Femme</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Nom translittéré</label>
+          <input type="text" id="p-nom_translittere" placeholder="ex : Ra-mesu-sw">
+        </div>
+      </div>
+
+      <div id="champs-roi" class="form-grid" style="margin-top:10px;">
+        <div class="field">
+          <label>Dynastie</label>
+          <input type="text" id="p-dynastie" placeholder="ex : XIXe dynastie">
+        </div>
+        <div class="field">
+          <label>Ordre de succession</label>
+          <input type="number" step="any" id="p-ordre_succession" placeholder="ex : 3">
+        </div>
+        <div class="field">
+          <label>Nom d'Horus</label>
+          <input type="text" id="p-nom_horus">
+        </div>
+        <div class="field">
+          <label>Nom de Nebty</label>
+          <input type="text" id="p-nom_nebty">
+        </div>
+        <div class="field">
+          <label>Nom d'Horus d'or</label>
+          <input type="text" id="p-nom_horus_or">
+        </div>
+        <div class="field">
+          <label>Nomen</label>
+          <input type="text" id="p-nomen">
+        </div>
+        <div class="field">
+          <label>Prénomen</label>
+          <input type="text" id="p-prenomen">
+        </div>
+        <div class="field">
+          <label>Début du règne</label>
+          <input type="text" id="p-regne_debut" placeholder="ex : vers -1279">
+        </div>
+        <div class="field">
+          <label>Fin du règne</label>
+          <input type="text" id="p-regne_fin" placeholder="ex : vers -1213">
+        </div>
+        <div class="field">
+          <label>Âge d'accès au trône</label>
+          <input type="text" id="p-age_acces_trone" placeholder="ex : vers 20 ans">
+        </div>
+        <div class="field">
+          <label>Nombre d'années de règne</label>
+          <input type="text" id="p-duree_regne" placeholder="ex : 66 ans">
+        </div>
+      </div>
+
+      <div id="champs-femme" class="form-grid" style="margin-top:10px;">
+        <div class="field">
+          <label>Statut d'épouse</label>
+          <select id="p-statut_epouse">
+            <option value="">— non précisé —</option>
+            <option value="grande_epouse_royale">Grande épouse royale</option>
+            <option value="epouse_royale">Épouse royale</option>
+            <option value="concubine">Concubine</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="champs-secondaires" class="form-grid" style="margin-top:10px;">
+        <div class="field">
+          <label>Champ libre 1</label>
+          <input type="text" id="p-champ_texte_1">
+        </div>
+        <div class="field">
+          <label>Champ libre 2</label>
+          <input type="text" id="p-champ_texte_2">
+        </div>
+        <div class="field">
+          <label>Champ libre 3</label>
+          <input type="text" id="p-champ_texte_3">
+        </div>
+        <div class="field">
+          <label>Champ libre 4</label>
+          <input type="text" id="p-champ_texte_4">
+        </div>
+      </div>
+
+      <div class="form-grid" style="margin-top:10px;">
+        <div class="field" style="grid-column:1/-1;">
+          <label>Commentaire</label>
+          <input type="text" id="p-commentaire">
+        </div>
+      </div>
+
+      <div class="actions personnes-actions-row">
+        <div>
+          <button class="btn btn-primary" onclick="savePersonne()">Enregistrer</button>
+          <button class="btn btn-secondary" onclick="resetPersonneForm()">Annuler</button>
+        </div>
+        <input type="text" id="personnes-search" placeholder="🔎 Rechercher une personne (nom, dynastie...)" oninput="renderPersonnesTable()">
+      </div>
+      <div class="status" id="personne-status"></div>
+    </div>
+
+    <div class="card personnes-liste-card">
+      <h2>Liste des personnes</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th class="th-sort" onclick="trierPersonnesPar('nom_usuel')">Nom<span class="sort-arrow" id="sort-arrow-nom_usuel"></span></th>
+            <th class="th-sort" onclick="trierPersonnesPar('role')">Rôle<span class="sort-arrow" id="sort-arrow-role"></span></th>
+            <th>Sexe</th>
+            <th class="th-sort" onclick="trierPersonnesPar('dynastie')">Dynastie<span class="sort-arrow" id="sort-arrow-dynastie"></span></th>
+            <th class="th-sort" onclick="trierPersonnesPar('regne_debut')">Règne<span class="sort-arrow" id="sort-arrow-regne_debut"></span></th>
+            <th class="th-sort" onclick="trierPersonnesPar('ordre_succession')">Ordre<span class="sort-arrow" id="sort-arrow-ordre_succession"></span></th>
+            <th></th>
+          </tr></thead>
+          <tbody id="personnes-table"><tr><td colspan="7" class="empty">Chargement...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    </div>
+  </section>
+
+  <section id="tab-mariages" class="tab">
+    <div class="card sticky-form">
+      <h2 id="mariage-form-title">Ajouter un mariage</h2>
+      <input type="hidden" id="mariage-id">
+      <div class="form-grid">
+        <div class="field">
+          <label>Personne 1</label>
+          <select id="m-personne1"></select>
+        </div>
+        <div class="field">
+          <label>Personne 2</label>
+          <select id="m-personne2"></select>
+        </div>
+        <div class="field">
+          <label>Ordre du mariage</label>
+          <input type="number" id="m-ordre" placeholder="1, 2, 3...">
+        </div>
+        <div class="field"><label>Date début</label><input type="text" id="m-date_debut"></div>
+        <div class="field"><label>Date fin</label><input type="text" id="m-date_fin" placeholder="veuvage, divorce..."></div>
+        <div class="field full"><label>Commentaire</label><textarea id="m-commentaire"></textarea></div>
+      </div>
+      <p class="hint-text">L'ordre sert à classer les remariages dans le temps pour une même personne (1 = premier mariage, 2 = second...).</p>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="saveMariage()">Enregistrer</button>
+        <button class="btn btn-secondary" onclick="resetMariageForm()">Annuler</button>
+      </div>
+      <div class="status" id="mariage-status"></div>
+    </div>
+
+    <div class="card">
+      <h2>Liste des mariages</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Personne 1</th><th>Personne 2</th><th>Ordre</th><th>Dates</th><th></th></tr></thead>
+          <tbody id="mariages-table"><tr><td colspan="5" class="empty">Chargement...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-filiations" class="tab">
+    <div class="card sticky-form">
+      <h2 id="filiation-form-title">Ajouter une filiation</h2>
+      <input type="hidden" id="filiation-id">
+      <div class="form-grid">
+        <div class="field">
+          <label>Enfant</label>
+          <select id="f-enfant"></select>
+        </div>
+        <div class="field">
+          <label>Père (laisser sur "?" si inconnu)</label>
+          <select id="f-pere">
+            <option value="">? (père inconnu)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Mère (laisser sur "?" si inconnue)</label>
+          <select id="f-mere">
+            <option value="">? (mère inconnue)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Père incertain</label>
+          <select id="f-pere_incertain">
+            <option value="false">Non</option>
+            <option value="true">Oui</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Mère incertaine</label>
+          <select id="f-mere_incertaine">
+            <option value="false">Non</option>
+            <option value="true">Oui</option>
+          </select>
+        </div>
+      </div>
+      <p class="hint-text">"Père/Mère incertain(e)" = le lien est connu mais douteux (trait pointillé dans l'arbre) — différent d'un parent totalement inconnu (affiché "?").</p>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="saveFiliation()">Enregistrer</button>
+        <button class="btn btn-secondary" onclick="resetFiliationForm()">Annuler</button>
+      </div>
+      <div class="status" id="filiation-status"></div>
+    </div>
+
+    <div class="card">
+      <h2>Liste des filiations</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Enfant</th><th>Père</th><th>Mère</th><th>Incertitude</th><th></th></tr></thead>
+          <tbody id="filiations-table"><tr><td colspan="5" class="empty">Chargement...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-aide" class="tab">
+    <div class="card">
+      <h2>1. Créer votre première base de généalogie</h2>
+      <p class="hint-text">Cette application ne stocke rien elle-même : vos données vivent dans votre propre projet Supabase (gratuit), séparé et privé. Suivez ces étapes une seule fois pour tout mettre en place.</p>
+      <ol class="aide-steps">
+        <li>Créez un compte gratuit sur <a href="https://supabase.com" target="_blank" rel="noopener">supabase.com</a> (bouton « Start your project »), puis créez un nouveau projet. <em>(Un compte gratuit permet 2 projets — gardez ça en tête si vous comptez créer plusieurs arbres, voir section 6 ci-dessous.)</em></li>
+        <li>Une fois le projet créé, ouvrez le menu <strong>SQL Editor</strong> dans la barre latérale gauche (icône en forme de tableau/base de données) — un éditeur vide s'ouvre automatiquement, prêt à recevoir le script.</li>
+        <li>Copiez le script ci-dessous (bouton « Copier »), collez-le dans l'éditeur, puis cliquez sur <strong>Run</strong>. Cela crée en une fois les 3 tables nécessaires (personnes, mariages, filiations).</li>
+      </ol>
+      <div class="code-block-wrap">
+        <button class="copy-btn" onclick="copySqlScript()">Copier</button>
+        <pre class="code-block" id="sql-script">-- ============================================================
+-- Script de création des tables — Généalogie familiale
+-- ============================================================
+-- MODE D&#x27;EMPLOI :
+-- 1. Ouvrez votre projet sur https://supabase.com
+-- 2. Dans le menu de gauche, cliquez sur &quot;SQL Editor&quot; (un éditeur vide s'ouvre)
+-- 3. Collez tout ce fichier, puis cliquez sur &quot;Run&quot;
+-- Les 3 tables sont créées en une seule fois.
+-- ============================================================
+
+create extension if not exists &quot;pgcrypto&quot;;
+
+-- Table des personnes -------------------------------------------------
+create table if not exists personnes (
+  id uuid primary key default gen_random_uuid(),
+  nom text not null,
+  prenom text,
+  autres_prenoms text,
+  sexe text,
+  date_naissance text,
+  date_deces text,
+  ville_naissance text,
+  pays_naissance text,
+  commentaire_1 text,
+  commentaire_2 text,
+  commentaire_3 text,
+  created_at timestamptz default now()
+);
+
+-- Table des mariages ----------------------------------------------------
+create table if not exists mariages (
+  id uuid primary key default gen_random_uuid(),
+  personne_1_id uuid not null references personnes(id) on delete cascade,
+  personne_2_id uuid not null references personnes(id) on delete cascade,
+  ordre integer,
+  date_debut text,
+  date_fin text,
+  commentaire text,
+  created_at timestamptz default now()
+);
+
+-- Table des filiations ----------------------------------------------------
+-- (un enfant n&#x27;a qu&#x27;une seule ligne de filiation, d&#x27;où &quot;unique&quot;)
+create table if not exists filiations (
+  id uuid primary key default gen_random_uuid(),
+  enfant_id uuid not null unique references personnes(id) on delete cascade,
+  pere_id uuid references personnes(id) on delete set null,
+  mere_id uuid references personnes(id) on delete set null,
+  pere_incertain boolean default false,
+  mere_incertaine boolean default false,
+  created_at timestamptz default now()
+);
+
+-- ============================================================
+-- Sécurité (RLS)
+-- ============================================================
+-- Supabase active la sécurité au niveau des lignes par défaut, ce qui
+-- bloque tout accès tant qu&#x27;aucune règle n&#x27;est définie. Ces règles
+-- autorisent l&#x27;app (via la clé &quot;publishable&quot;) à lire/écrire librement —
+-- adapté à un usage personnel où chaque utilisateur a son propre projet.
+
+alter table personnes enable row level security;
+alter table mariages enable row level security;
+alter table filiations enable row level security;
+
+create policy &quot;Accès complet personnes&quot; on personnes
+  for all using (true) with check (true);
+
+create policy &quot;Accès complet mariages&quot; on mariages
+  for all using (true) with check (true);
+
+create policy &quot;Accès complet filiations&quot; on filiations
+  for all using (true) with check (true);</pre>
+      </div>
+      <div class="status" id="aide-copy-status"></div>
+      <ol class="aide-steps" style="counter-reset: step 3;">
+        <li>Dans la barre latérale de gauche, cliquez sur <strong>« Integrations »</strong>, puis sur <strong>« Data API »</strong> (onglet « Overview »). Vous y trouverez le champ <strong>« API URL »</strong> — copiez-le (si vous gardez par erreur le <code>/rest/v1/</code> à la fin, l'application le retire automatiquement, pas d'inquiétude).</li>
+        <li>Cliquez ensuite sur <strong>« Project Settings »</strong> (icône ⚙ tout en bas de la barre latérale), puis sur <strong>« API Keys »</strong>. Dans la section <strong>« Publishable key »</strong>, copiez la clé qui commence par <code>sb_publishable_</code>.</li>
+        <li>Revenez sur cette page, cliquez sur <strong>« ⚙ Changer de connexion »</strong> en haut, et collez ces deux valeurs. <em>(Cette fenêtre peut être fermée à tout moment via le « × » si vous voulez d'abord relire ce guide.)</em></li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h2>2. Comment fonctionne cette application</h2>
+      <p>Elle ne stocke rien elle-même : elle se contente d'afficher et de modifier les données de <strong>votre</strong> projet Supabase.</p>
+      <ul>
+        <li>La connexion (URL + clé) que vous saisissez est mémorisée <strong>dans ce navigateur, sur cet appareil</strong> — pas de compte, pas de mot de passe à ce niveau-là.</li>
+        <li>Sur un autre navigateur ou un autre appareil, vous devrez saisir à nouveau ces deux valeurs (elles restent disponibles sur la page « API Keys »/« Data API » de votre projet Supabase, à tout moment).</li>
+        <li>En navigation privée, rien n'est mémorisé : il faut se reconnecter à chaque session.</li>
+        <li>L'application n'est connectée qu'à <strong>un seul arbre à la fois</strong> — voir la section 6 pour en gérer plusieurs.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>3. Encoder vos données</h2>
+      <p>Trois onglets en haut : <strong>Personnes</strong>, <strong>Mariages</strong>, <strong>Filiations</strong>. Ajoutez d'abord les personnes, puis reliez-les par des mariages et des filiations (chaque enfant n'a qu'une seule fiche de filiation, avec un père et/ou une mère — laissez sur « ? » si inconnu, ou cochez « incertain·e » si le lien est probable mais pas garanti).</p>
+      <p class="hint-text"><strong>Suppression :</strong> elle est <strong>définitive et immédiate</strong> — il n'y a pas de corbeille dans cette version. Pensez à exporter régulièrement (section 4) si vous voulez pouvoir revenir en arrière en cas d'erreur.</p>
+    </div>
+
+    <div class="card">
+      <h2>4. Sauvegarder vos données</h2>
+      <p>Le bouton <strong>« 💾 Sauvegarder en Excel »</strong> télécharge un fichier <code>.xlsx</code> avec vos 3 tables. C'est à la fois une sauvegarde à conserver de votre côté et un fichier <strong>réimportable</strong> (section 5) — utile avant une suppression importante, ou pour transférer vos données vers un autre arbre.</p>
+    </div>
+
+    <div class="card">
+      <h2>5. Réimporter des données</h2>
+      <p>Le bouton <strong>« 📥 Importer depuis Excel »</strong> accepte un fichier généré par « Sauvegarder en Excel » (ci-dessus) sur cette application, ou par l'export d'une autre installation compatible.</p>
+      <ul>
+        <li>L'import <strong>ajoute</strong> les données à celles déjà présentes — il ne vide pas la base avant.</li>
+        <li>Si les fiches du fichier existent déjà dans la base connectée (mêmes identifiants), l'import est bloqué avec un message clair — aucun doublon n'est créé par erreur.</li>
+        <li>Pour importer dans une base neuve, assurez-vous qu'elle est bien vide au préalable (nouveau projet tout juste créé, section 1).</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>6. Créer ou gérer plusieurs arbres</h2>
+      <p>Le bouton <strong>« 🌳 Mes arbres »</strong> en haut liste tous les arbres auxquels vous vous êtes déjà connecté·e sur ce navigateur, avec un nom que vous choisissez — cliquez sur <strong>« Utiliser »</strong> pour basculer instantanément de l'un à l'autre, sans ressaisir l'URL/clé à chaque fois.</p>
+      <p>Pour ajouter un nouvel arbre à la liste :</p>
+      <ol class="aide-steps">
+        <li>Créez un nouveau projet Supabase séparé et exécutez-y le script SQL (section 1, étapes 1 à 3).</li>
+        <li>Cliquez sur <strong>« ⚙ Changer de connexion »</strong> et saisissez l'URL/clé de ce nouveau projet. Un nom vous sera demandé — il apparaîtra ensuite dans « Mes arbres ».</li>
+      </ol>
+      <p class="hint-text"><strong>Deux limites différentes à ne pas confondre :</strong></p>
+      <ul>
+        <li><strong>Cette application</strong> peut mémoriser <strong>autant d'arbres que vous voulez</strong> — aucune limite de son côté.</li>
+        <li><strong>Supabase</strong>, lui, limite un compte gratuit à <strong>2 projets actifs</strong>. Pour un 3<sup>e</sup> arbre gratuit, il faut soit passer un projet existant en payant, soit créer un second compte/organisation Supabase (avec une autre adresse email) qui aura droit à 2 projets gratuits supplémentaires.</li>
+      </ul>
+      <p class="hint-text">Chaque arbre reste intact indépendamment des autres — la liste « Mes arbres » n'est qu'un raccourci mémorisé dans ce navigateur ; « Retirer » un arbre de cette liste n'efface aucune donnée sur Supabase, juste le raccourci local.</p>
+    </div>
+
+    <div class="card">
+      <h2>7. Visualiser en 3D</h2>
+      <p>Le lien <strong>« 🌳 Vue 3D »</strong> en haut ouvre une représentation interactive de l'arbre connecté (même connexion, pas besoin de la ressaisir). Une <strong>« vue simplifiée »</strong> est disponible pour les arbres bien fournis, et un bouton permet de <strong>générer une vue figée</strong> — un fichier autonome, centré sur une personne, à partager sans donner accès à la base complète.</p>
+    </div>
+
+    <div class="card">
+      <h2>8. Visualiser en 2D (schéma imprimable)</h2>
+      <p>Le lien <strong>« 📐 Vue 2D »</strong> propose une représentation schématique classique (arbre à plat, sans rotation), pensée pour être <strong>imprimée</strong> ou partagée simplement. Un bouton <strong>« 🖨️ Imprimer »</strong> lance directement l'impression du schéma (l'en-tête et la légende sont automatiquement masqués à l'impression). Même connexion que le reste de l'application — pas besoin de la ressaisir.</p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-credit">© Origines — Application créée par Origines. Tous droits réservés.</footer>
+
+<script>
+const LS_URL_KEY = 'genealogie_supabase_url';   // ancien systeme (conserve pour migration automatique)
+const LS_ANON_KEY = 'genealogie_supabase_key';  // ancien systeme (conserve pour migration automatique)
+const LS_ARBRES_KEY = 'genealogie_arbres';      // liste des arbres memorises : [{id, nom, url, key}]
+const LS_ACTIF_KEY = 'genealogie_arbre_actif';  // id de l'arbre actuellement connecte
+const LS_DRAFT_KEY = 'genealogie_connexion_brouillon'; // saisie en cours, avant validation
+let sb = null;
+let personnesCache = [];
+
+// La barre du haut (header + onglets) reste fixe a l'ecran ; on mesure sa
+// hauteur reelle (variable selon la largeur d'ecran) pour que le formulaire
+// "collant" ne se retrouve jamais cache dessous.
+function ajusterOffsetBarreFixe() {
+  const el = document.querySelector('.top-bar');
+  if (el) document.documentElement.style.setProperty('--topbar-h', el.offsetHeight + 'px');
+}
+window.addEventListener('resize', ajusterOffsetBarreFixe);
+window.addEventListener('load', ajusterOffsetBarreFixe);
+ajusterOffsetBarreFixe();
+
+// ============================================================
+// Gestion de plusieurs arbres (liste memorisee dans ce navigateur)
+// ============================================================
+function getArbres() {
+  try { return JSON.parse(localStorage.getItem(LS_ARBRES_KEY)) || []; }
+  catch (e) { return []; }
+}
+
+function saveArbres(liste) {
+  localStorage.setItem(LS_ARBRES_KEY, JSON.stringify(liste));
+}
+
+function migrerAncienneConnexionSiBesoin() {
+  const arbres = getArbres();
+  const ancienUrl = localStorage.getItem(LS_URL_KEY);
+  const ancienneKey = localStorage.getItem(LS_ANON_KEY);
+  if (ancienUrl && ancienneKey && !arbres.some(a => a.url === ancienUrl)) {
+    const id = 'arbre-' + Date.now();
+    arbres.push({ id, nom: 'Mon arbre', url: ancienUrl, key: ancienneKey });
+    saveArbres(arbres);
+    localStorage.setItem(LS_ACTIF_KEY, id);
+  }
+}
+
+function upsertArbre(url, key, nomSouhaite) {
+  const arbres = getArbres();
+  let entry = arbres.find(a => a.url === url);
+  if (entry) {
+    entry.key = key;
+    if (nomSouhaite) entry.nom = nomSouhaite;
+  } else {
+    entry = { id: 'arbre-' + Date.now(), nom: nomSouhaite || 'Arbre sans nom', url, key };
+    arbres.push(entry);
+  }
+  saveArbres(arbres);
+  localStorage.setItem(LS_ACTIF_KEY, entry.id);
+  return entry;
+}
+
+function arbreActif() {
+  const id = localStorage.getItem(LS_ACTIF_KEY);
+  return getArbres().find(a => a.id === id) || null;
+}
+
+async function selectionnerArbre(id) {
+  const entry = getArbres().find(a => a.id === id);
+  if (!entry) return;
+  sb = supabase.createClient(entry.url, entry.key);
+  localStorage.setItem(LS_ACTIF_KEY, id);
+  closeArbres();
+  await init();
+}
+
+function renommerArbre(id) {
+  const arbres = getArbres();
+  const entry = arbres.find(a => a.id === id);
+  if (!entry) return;
+  const nouveauNom = prompt('Nouveau nom pour cet arbre :', entry.nom);
+  if (!nouveauNom || !nouveauNom.trim()) return;
+  entry.nom = nouveauNom.trim();
+  saveArbres(arbres);
+  renderArbresList();
+}
+
+function supprimerArbreMemorise(id) {
+  const arbres = getArbres();
+  const entry = arbres.find(a => a.id === id);
+  if (!entry) return;
+  if (!confirm('Retirer "' + entry.nom + '" de la liste mémorisée ? (Vos données restent intactes sur Supabase — ceci n\'efface que le raccourci dans ce navigateur.)')) return;
+  const nouvelleListe = arbres.filter(a => a.id !== id);
+  saveArbres(nouvelleListe);
+  if (localStorage.getItem(LS_ACTIF_KEY) === id) {
+    localStorage.removeItem(LS_ACTIF_KEY);
+  }
+  renderArbresList();
+}
+
+function openArbres() {
+  renderArbresList();
+  document.getElementById('arbres-overlay').classList.remove('hidden');
+}
+
+function closeArbres() {
+  document.getElementById('arbres-overlay').classList.add('hidden');
+}
+
+function renderArbresList() {
+  const arbres = getArbres();
+  const activeId = localStorage.getItem(LS_ACTIF_KEY);
+  const container = document.getElementById('arbres-list');
+  if (!arbres.length) {
+    container.innerHTML = '<p class="hint-text">Aucun arbre mémorisé pour l\'instant. Connectez-vous à un projet Supabase (« ⚙ Changer de connexion ») pour qu\'il apparaisse ici.</p>';
+    return;
+  }
+  container.innerHTML = arbres.map(a => `
+    <div class="arbre-item${a.id === activeId ? ' actif' : ''}">
+      <div class="arbre-info">
+        <strong>${escapeHtml(a.nom)}</strong>${a.id === activeId ? ' <span class="tag-actif">actif</span>' : ''}
+        <div class="arbre-url">${escapeHtml(a.url)}</div>
+      </div>
+      <div class="arbre-actions">
+        ${a.id === activeId ? '' : '<button class="btn btn-primary small" onclick="selectionnerArbre(\'' + a.id + '\')">Utiliser</button>'}
+        <button class="btn btn-secondary small" onclick="renommerArbre('${a.id}')">Renommer</button>
+        <button class="btn btn-danger small" onclick="supprimerArbreMemorise('${a.id}')">Retirer</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openConfig(prefill) {
+  // Sort du plein écran si actif (ex. arrivée via la zone "feu" d'Origines) :
+  // rester en plein écran pendant qu'on va copier l'URL/la clé Supabase dans
+  // un autre onglet/appli cause des pertes de saisie sur mobile.
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  }
+  document.getElementById('config-overlay').classList.remove('hidden');
+  const actif = arbreActif();
+  if (prefill && actif) {
+    document.getElementById('cfg-url').value = actif.url;
+    document.getElementById('cfg-key').value = actif.key;
+  } else {
+    // Restaure une saisie en cours si l'utilisateur a dû quitter la page
+    // (changer d'appli pour copier l'URL/la clé) avant d'avoir terminé.
+    let brouillon = null;
+    try { brouillon = JSON.parse(localStorage.getItem(LS_DRAFT_KEY)); } catch (e) {}
+    document.getElementById('cfg-url').value = (brouillon && brouillon.url) || '';
+    document.getElementById('cfg-key').value = (brouillon && brouillon.key) || '';
+  }
+  document.getElementById('config-status').textContent = '';
+}
+function saveConfigDraft() {
+  localStorage.setItem(LS_DRAFT_KEY, JSON.stringify({
+    url: document.getElementById('cfg-url').value,
+    key: document.getElementById('cfg-key').value
+  }));
+}
+
+function closeConfig() {
+  document.getElementById('config-overlay').classList.add('hidden');
+}
+
+async function saveConfig() {
+  // On nettoie l'URL au cas où l'utilisateur aurait collé l'adresse complète
+  // "API URL" de Supabase (qui inclut /rest/v1/) plutôt que la racine attendue.
+  let url = document.getElementById('cfg-url').value.trim();
+  url = url.replace(/\/rest\/v1\/?$/i, '').replace(/\/+$/, '');
+  document.getElementById('cfg-url').value = url;
+
+  const key = document.getElementById('cfg-key').value.trim();
+  const statusEl = document.getElementById('config-status');
+
+  if (!url || !key) {
+    statusEl.textContent = 'Merci de remplir les deux champs.';
+    statusEl.className = 'status error';
+    return;
+  }
+
+  statusEl.textContent = 'Vérification de la connexion...';
+  statusEl.className = 'status';
+
+  let testClient;
+  try {
+    testClient = supabase.createClient(url, key);
+  } catch (e) {
+    statusEl.textContent = 'URL invalide.';
+    statusEl.className = 'status error';
+    return;
+  }
+
+  const { error } = await testClient.from('personnes').select('id').limit(1);
+  if (error) {
+    statusEl.textContent = 'Connexion impossible : ' + error.message + ' (vérifiez l\'URL, la clé, et que les tables ont bien été créées — voir le mode d\'emploi).';
+    statusEl.className = 'status error';
+    return;
+  }
+
+  // Nouvel arbre pas encore mémorisé : on demande un petit nom pour le retrouver facilement.
+  const dejaConnu = getArbres().some(a => a.url === url);
+  let nom = null;
+  if (!dejaConnu) {
+    nom = prompt('Comment voulez-vous nommer cet arbre ? (ex : « Famille Laurent »)', 'Mon arbre');
+    if (nom === null) return; // annulé
+  }
+  upsertArbre(url, key, nom);
+  localStorage.removeItem(LS_DRAFT_KEY);
+
+  sb = testClient;
+  statusEl.textContent = 'Connecté !';
+  statusEl.className = 'status ok';
+  setTimeout(() => {
+    closeConfig();
+    init();
+  }, 500);
+}
+
+function initConnection() {
+  migrerAncienneConnexionSiBesoin();
+  const actif = arbreActif();
+  if (actif) {
+    sb = supabase.createClient(actif.url, actif.key);
+    init();
+  } else {
+    openConfig(false);
+  }
+}
+
+function copySqlScript() {
+  const text = document.getElementById('sql-script').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const el = document.getElementById('aide-copy-status');
+    el.textContent = 'Script copié dans le presse-papiers !';
+    el.className = 'status ok';
+    setTimeout(() => { el.textContent = ''; }, 3000);
+  }).catch(() => {
+    const el = document.getElementById('aide-copy-status');
+    el.textContent = 'Copie impossible — sélectionnez le texte manuellement.';
+    el.className = 'status error';
+  });
+}
+
+async function exportToExcel() {
+  if (!sb) {
+    alert('Connectez-vous d\'abord à votre base Supabase (⚙ Changer de connexion).');
+    return;
+  }
+  const [{ data: personnes, error: e1 }, { data: mariages, error: e2 }, { data: filiations, error: e3 }] =
+    await Promise.all([
+      sb.from('personnes').select('*'),
+      sb.from('mariages').select('*'),
+      sb.from('filiations').select('*')
+    ]);
+  if (e1 || e2 || e3) {
+    alert('Erreur lors de la récupération des données : ' + (e1 || e2 || e3).message);
+    return;
+  }
+
+  // Format technique (colonnes brutes, identifiants) plutôt que des noms en
+  // clair : c'est ce que "Importer depuis Excel" sait relire directement,
+  // pour que cette sauvegarde serve aussi de vraie copie restaurable
+  // (nouvel arbre, changement d'appareil, annulation d'une suppression...).
+  const personnesRows = (personnes || []).map(p => ({
+    id: p.id, nom_usuel: p.nom_usuel, role: p.role, sexe: p.sexe,
+    dynastie: p.dynastie, nom_horus: p.nom_horus, nom_nebty: p.nom_nebty, nom_horus_or: p.nom_horus_or,
+    nomen: p.nomen, prenomen: p.prenomen, regne_debut: p.regne_debut, regne_fin: p.regne_fin,
+    age_acces_trone: p.age_acces_trone, duree_regne: p.duree_regne, ordre_succession: p.ordre_succession,
+    nom_translittere: p.nom_translittere, statut_epouse: p.statut_epouse,
+    champ_texte_1: p.champ_texte_1, champ_texte_2: p.champ_texte_2, champ_texte_3: p.champ_texte_3, champ_texte_4: p.champ_texte_4,
+    commentaire: p.commentaire
+  }));
+
+  const mariagesRows = (mariages || []).map(m => ({
+    id: m.id, personne_1_id: m.personne_1_id, personne_2_id: m.personne_2_id,
+    ordre: m.ordre, date_debut: m.date_debut, date_fin: m.date_fin, commentaire: m.commentaire
+  }));
+
+  const filiationsRows = (filiations || []).map(f => ({
+    id: f.id, enfant_id: f.enfant_id, pere_id: f.pere_id, mere_id: f.mere_id,
+    pere_incertain: f.pere_incertain, mere_incertaine: f.mere_incertaine
+  }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(personnesRows), 'Personnes');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(mariagesRows), 'Mariages');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filiationsRows), 'Filiations');
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, 'genealogie-sauvegarde-' + dateStr + '.xlsx');
+}
+
+// ============================================================
+// IMPORT depuis un export .xlsx "brut" (colonnes id/technique) —
+// compatible avec les sauvegardes produites par la version privée
+// de l'app (celle avec identifiants techniques, pas les noms).
+// ============================================================
+function estVrai(v) {
+  return v === true || v === 'true' || v === 'TRUE' || v === 1 || v === '1';
+}
+
+async function importFromExcel(file) {
+  if (!file) return;
+  if (!sb) {
+    alert('Connectez-vous d\'abord à votre base Supabase (⚙ Changer de connexion).');
+    return;
+  }
+
+  // Empêche un double-clic ou un double-déclenchement d'importer deux fois de suite.
+  const btnImport = document.getElementById('btn-import');
+  if (btnImport.disabled) return;
+
+  if (!confirm('Importer va ajouter ces données à la base actuellement connectée. Continuer ?')) {
+    document.getElementById('import-file').value = '';
+    return;
+  }
+
+  btnImport.disabled = true;
+  btnImport.textContent = '📥 Import en cours...';
+
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+
+    const feuille = (nom) => {
+      const ws = wb.Sheets[nom];
+      return ws ? XLSX.utils.sheet_to_json(ws, { defval: null }) : [];
+    };
+
+    const brutPersonnes = feuille('Personnes');
+    const brutMariages = feuille('Mariages');
+    const brutFiliations = feuille('Filiations');
+
+    if (!brutPersonnes.length) {
+      alert('Aucune feuille "Personnes" trouvée dans ce fichier (ou elle est vide).');
+      return;
+    }
+
+    // On ne garde que les colonnes existant dans le schéma de CETTE app,
+    // on ignore les colonnes techniques (cree_par, modifie_par...) propres
+    // à la version privée, et on saute les fiches déjà à la corbeille.
+    const personnesAImporter = brutPersonnes
+      .filter(p => !p.supprime_le)
+      .map(p => ({
+        id: p.id, nom_usuel: p.nom_usuel, role: p.role || 'roi', sexe: p.sexe,
+        dynastie: p.dynastie, nom_horus: p.nom_horus, nom_nebty: p.nom_nebty, nom_horus_or: p.nom_horus_or,
+        nomen: p.nomen, prenomen: p.prenomen, regne_debut: p.regne_debut, regne_fin: p.regne_fin,
+        age_acces_trone: p.age_acces_trone, duree_regne: p.duree_regne,
+        ordre_succession: (p.ordre_succession === '' || p.ordre_succession === undefined) ? null : p.ordre_succession,
+        nom_translittere: p.nom_translittere, statut_epouse: p.statut_epouse || null,
+        champ_texte_1: p.champ_texte_1, champ_texte_2: p.champ_texte_2, champ_texte_3: p.champ_texte_3, champ_texte_4: p.champ_texte_4,
+        commentaire: p.commentaire,
+      }));
+
+    const mariagesAImporter = brutMariages
+      .filter(m => !m.supprime_le)
+      .map(m => ({
+        id: m.id, personne_1_id: m.personne_1_id, personne_2_id: m.personne_2_id,
+        ordre: (m.ordre === '' || m.ordre === undefined) ? null : m.ordre,
+        date_debut: m.date_debut, date_fin: m.date_fin, commentaire: m.commentaire,
+      }));
+
+    const filiationsAImporter = brutFiliations
+      .filter(f => !f.supprime_le)
+      .map(f => ({
+        id: f.id, enfant_id: f.enfant_id, pere_id: f.pere_id || null, mere_id: f.mere_id || null,
+        pere_incertain: estVrai(f.pere_incertain), mere_incertaine: estVrai(f.mere_incertaine),
+      }));
+
+    setStatus('personne-status', 'Import en cours (' + personnesAImporter.length + ' personnes)...', false);
+
+    // Ordre important : personnes d'abord (mariages/filiations les référencent).
+    const { error: eP } = await sb.from('personnes').insert(personnesAImporter);
+    if (eP) throw new Error('Personnes : ' + eP.message);
+
+    if (mariagesAImporter.length) {
+      const { error: eM } = await sb.from('mariages').insert(mariagesAImporter);
+      if (eM) throw new Error('Mariages : ' + eM.message);
+    }
+    if (filiationsAImporter.length) {
+      const { error: eF } = await sb.from('filiations').insert(filiationsAImporter);
+      if (eF) throw new Error('Filiations : ' + eF.message);
+    }
+
+    await Promise.all([loadPersonnes(), loadMariages(), loadFiliations()]);
+    setStatus('personne-status', 'Import terminé : ' + personnesAImporter.length + ' personnes, ' +
+      mariagesAImporter.length + ' mariages, ' + filiationsAImporter.length + ' filiations.', false);
+  } catch (e) {
+    if (/duplicate key/i.test(e.message)) {
+      alert('Ces données semblent déjà avoir été importées (identifiants déjà présents en base). ' +
+        'Aucun doublon n\'a été créé. Si vous vouliez réimporter depuis zéro, videz d\'abord les tables concernées.');
+    } else {
+      alert('Erreur lors de l\'import : ' + e.message);
+    }
+  } finally {
+    document.getElementById('import-file').value = '';
+    btnImport.disabled = false;
+    btnImport.textContent = '📥 Importer depuis Excel';
+  }
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+function setStatus(id, message, isError) {
+  const el = document.getElementById(id);
+  el.textContent = message;
+  el.className = 'status ' + (isError ? 'error' : 'ok');
+  if (message) setTimeout(() => { el.textContent = ''; }, 4000);
+}
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function nomComplet(p) {
+  if (!p) return '?';
+  return p.nom_usuel || '?';
+}
+
+const ROLE_LABEL = { roi: 'Roi/Pharaon', femme: 'Femme', enfant: 'Enfant' };
+
+function majAffichageChampsRole() {
+  const role = document.getElementById('p-role').value;
+  document.getElementById('champs-roi').style.display = role === 'roi' ? 'grid' : 'none';
+  document.getElementById('champs-femme').style.display = role === 'femme' ? 'grid' : 'none';
+  // Les 4 champs libres servent surtout pour femme/enfant (le roi a déjà
+  // beaucoup de champs dédiés) mais restent accessibles dans tous les cas.
+}
+
+// ============================================================
+// Recherche et tri (cote client, sans re-interroger Supabase)
+// ============================================================
+function normaliserTexte(str) {
+  return String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+// Date/règne en texte libre ("vers -1279", "-1279", "1279 av. J.-C."...) ->
+// valeur numérique triable. Gère les dates avant J.-C. (négatives ou "av.").
+function dateSortValue(str) {
+  if (!str) return null;
+  const s = String(str).toLowerCase();
+  const avJC = /av/.test(s);
+  const yearMatch = s.match(/-?\d{1,5}/);
+  if (!yearMatch) return null;
+  let year = parseInt(yearMatch[0], 10);
+  if (avJC && year > 0) year = -year;
+  return year;
+}
+
+let personnesTri = { champ: null, direction: 'asc' };
+
+function trierPersonnesPar(champ) {
+  if (personnesTri.champ === champ) {
+    personnesTri.direction = personnesTri.direction === 'asc' ? 'desc' : 'asc';
+  } else {
+    personnesTri = { champ, direction: 'asc' };
+  }
+  renderPersonnesTable();
+}
+
+function majFlechesTri() {
+  ['nom_usuel', 'dynastie', 'regne_debut'].forEach(champ => {
+    const el = document.getElementById('sort-arrow-' + champ);
+    if (!el) return;
+    el.textContent = personnesTri.champ === champ ? (personnesTri.direction === 'asc' ? '▲' : '▼') : '';
+  });
+}
+
+function resetPersonneForm() {
+  document.getElementById('personne-id').value = '';
+  document.getElementById('personne-form-title').textContent = 'Ajouter une personne';
+  ['nom_usuel','sexe','nom_translittere','dynastie','ordre_succession','nom_horus','nom_nebty',
+   'nom_horus_or','nomen','prenomen','regne_debut','regne_fin','age_acces_trone','duree_regne',
+   'statut_epouse','champ_texte_1','champ_texte_2','champ_texte_3','champ_texte_4','commentaire'].forEach(f => {
+    const el = document.getElementById('p-' + f);
+    if (el) el.value = '';
+  });
+  document.getElementById('p-role').value = 'roi';
+  majAffichageChampsRole();
+}
+
+async function savePersonne() {
+  const id = document.getElementById('personne-id').value;
+  const nom_usuel = document.getElementById('p-nom_usuel').value.trim();
+  if (!nom_usuel) { setStatus('personne-status', 'Le nom usuel est obligatoire.', true); return; }
+
+  const payload = {
+    nom_usuel,
+    role: document.getElementById('p-role').value,
+    sexe: document.getElementById('p-sexe').value || null,
+    nom_translittere: document.getElementById('p-nom_translittere').value || null,
+    dynastie: document.getElementById('p-dynastie').value || null,
+    ordre_succession: document.getElementById('p-ordre_succession').value || null,
+    nom_horus: document.getElementById('p-nom_horus').value || null,
+    nom_nebty: document.getElementById('p-nom_nebty').value || null,
+    nom_horus_or: document.getElementById('p-nom_horus_or').value || null,
+    nomen: document.getElementById('p-nomen').value || null,
+    prenomen: document.getElementById('p-prenomen').value || null,
+    regne_debut: document.getElementById('p-regne_debut').value || null,
+    regne_fin: document.getElementById('p-regne_fin').value || null,
+    age_acces_trone: document.getElementById('p-age_acces_trone').value || null,
+    duree_regne: document.getElementById('p-duree_regne').value || null,
+    statut_epouse: document.getElementById('p-statut_epouse').value || null,
+    champ_texte_1: document.getElementById('p-champ_texte_1').value || null,
+    champ_texte_2: document.getElementById('p-champ_texte_2').value || null,
+    champ_texte_3: document.getElementById('p-champ_texte_3').value || null,
+    champ_texte_4: document.getElementById('p-champ_texte_4').value || null,
+    commentaire: document.getElementById('p-commentaire').value || null,
+  };
+
+  try {
+    let error;
+    if (id) {
+      ({ error } = await sb.from('personnes').update(payload).eq('id', id));
+    } else {
+      ({ error } = await sb.from('personnes').insert(payload));
+    }
+    if (error) throw error;
+    setStatus('personne-status', 'Enregistré.', false);
+    resetPersonneForm();
+    await loadPersonnes();
+  } catch (e) {
+    setStatus('personne-status', 'Erreur : ' + e.message, true);
+  }
+}
+
+function editPersonne(p) {
+  document.getElementById('personne-id').value = p.id;
+  document.getElementById('personne-form-title').textContent = 'Modifier : ' + nomComplet(p);
+  document.getElementById('p-nom_usuel').value = p.nom_usuel || '';
+  document.getElementById('p-role').value = p.role || 'roi';
+  document.getElementById('p-sexe').value = p.sexe || '';
+  document.getElementById('p-nom_translittere').value = p.nom_translittere || '';
+  document.getElementById('p-dynastie').value = p.dynastie || '';
+  document.getElementById('p-ordre_succession').value = p.ordre_succession ?? '';
+  document.getElementById('p-nom_horus').value = p.nom_horus || '';
+  document.getElementById('p-nom_nebty').value = p.nom_nebty || '';
+  document.getElementById('p-nom_horus_or').value = p.nom_horus_or || '';
+  document.getElementById('p-nomen').value = p.nomen || '';
+  document.getElementById('p-prenomen').value = p.prenomen || '';
+  document.getElementById('p-regne_debut').value = p.regne_debut || '';
+  document.getElementById('p-regne_fin').value = p.regne_fin || '';
+  document.getElementById('p-age_acces_trone').value = p.age_acces_trone || '';
+  document.getElementById('p-duree_regne').value = p.duree_regne || '';
+  document.getElementById('p-statut_epouse').value = p.statut_epouse || '';
+  document.getElementById('p-champ_texte_1').value = p.champ_texte_1 || '';
+  document.getElementById('p-champ_texte_2').value = p.champ_texte_2 || '';
+  document.getElementById('p-champ_texte_3').value = p.champ_texte_3 || '';
+  document.getElementById('p-champ_texte_4').value = p.champ_texte_4 || '';
+  document.getElementById('p-commentaire').value = p.commentaire || '';
+  majAffichageChampsRole();
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+async function deletePersonne(id, nom) {
+  if (!confirm('Supprimer "' + nom + '" ? Ses mariages et filiations liés seront aussi supprimés.')) return;
+  try {
+    const { error } = await sb.from('personnes').delete().eq('id', id);
+    if (error) throw error;
+    await loadPersonnes();
+  } catch (e) {
+    alert('Erreur : ' + e.message);
+  }
+}
+
+async function loadPersonnes() {
+  const { data, error } = await sb.from('personnes').select('*');
+  const tbody = document.getElementById('personnes-table');
+  if (error) { tbody.innerHTML = '<tr><td colspan="7" class="empty">Erreur : ' + error.message + '</td></tr>'; return; }
+  const sorted = (data || []).slice().sort((a, b) =>
+    (a.nom_usuel || '').localeCompare(b.nom_usuel || '', 'fr', { sensitivity: 'base' })
+  );
+  personnesCache = sorted;
+  renderPersonnesTable();
+  populatePersonneSelects();
+}
+
+function renderPersonnesTable() {
+  const tbody = document.getElementById('personnes-table');
+  const terme = normaliserTexte(document.getElementById('personnes-search')?.value || '');
+
+  let liste = personnesCache.slice();
+
+  if (terme) {
+    liste = liste.filter(p => {
+      const cible = normaliserTexte([p.nom_usuel, p.dynastie, p.nom_translittere, p.nomen, p.prenomen].filter(Boolean).join(' '));
+      return cible.includes(terme);
+    });
+  }
+
+  if (personnesTri.champ) {
+    const champ = personnesTri.champ;
+    const sens = personnesTri.direction === 'asc' ? 1 : -1;
+    if (champ === 'nom_usuel' || champ === 'dynastie' || champ === 'role') {
+      liste.sort((a, b) => sens * (a[champ] || '').localeCompare(b[champ] || '', 'fr', { sensitivity: 'base' }));
+    } else {
+      liste.sort((a, b) => {
+        const va = dateSortValue(a[champ]);
+        const vb = dateSortValue(b[champ]);
+        if (va === null && vb === null) return 0;
+        if (va === null) return 1;
+        if (vb === null) return -1;
+        return (va - vb) * sens;
+      });
+    }
+  }
+
+  majFlechesTri();
+
+  if (!liste.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">' +
+      (terme ? 'Aucune personne ne correspond à la recherche.' : 'Aucune personne encodée pour l\'instant.') +
+      '</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = liste.map(p => {
+    const sexeTag = p.sexe
+      ? '<span class="tag tag-' + (p.sexe === 'Homme' ? 'homme' : 'femme') + '">' + p.sexe + '</span>'
+      : '<span class="tag tag-inconnu">?</span>';
+    const regne = [p.regne_debut, p.regne_fin].filter(Boolean).join(' → ');
+    return '<tr>' +
+      '<td>' + escapeHtml(nomComplet(p)) + '</td>' +
+      '<td>' + escapeHtml(ROLE_LABEL[p.role] || p.role || '') + '</td>' +
+      '<td>' + sexeTag + '</td>' +
+      '<td>' + escapeHtml(p.dynastie || '') + '</td>' +
+      '<td>' + escapeHtml(regne) + '</td>' +
+      '<td>' + (p.ordre_succession ?? '') + '</td>' +
+      '<td class="row-actions">' +
+        '<button class="btn btn-secondary small" onclick=\'editPersonne(' + JSON.stringify(p).replace(/'/g, "&#39;") + ')\'>Modifier</button>' +
+        '<button class="btn btn-danger small" onclick="deletePersonne(\'' + p.id + '\', ' + JSON.stringify(nomComplet(p)) + ')">Supprimer</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function populatePersonneSelects() {
+  const options = personnesCache.map(p => {
+    const precision = p.dynastie || (ROLE_LABEL[p.role] || '');
+    return '<option value="' + p.id + '">' + escapeHtml(nomComplet(p)) + (precision ? ' (' + precision + ')' : '') + '</option>';
+  }).join('');
+  document.getElementById('m-personne1').innerHTML = options;
+  document.getElementById('m-personne2').innerHTML = options;
+  document.getElementById('f-enfant').innerHTML = options;
+  document.getElementById('f-pere').innerHTML = '<option value="">? (père inconnu)</option>' + options;
+  document.getElementById('f-mere').innerHTML = '<option value="">? (mère inconnue)</option>' + options;
+}
+
+function resetMariageForm() {
+  document.getElementById('mariage-id').value = '';
+  document.getElementById('mariage-form-title').textContent = 'Ajouter un mariage';
+  document.getElementById('m-ordre').value = '';
+  document.getElementById('m-date_debut').value = '';
+  document.getElementById('m-date_fin').value = '';
+  document.getElementById('m-commentaire').value = '';
+}
+
+async function saveMariage() {
+  const id = document.getElementById('mariage-id').value;
+  const personne_1_id = document.getElementById('m-personne1').value;
+  const personne_2_id = document.getElementById('m-personne2').value;
+  if (!personne_1_id || !personne_2_id) { setStatus('mariage-status', 'Choisis les deux personnes.', true); return; }
+  if (personne_1_id === personne_2_id) { setStatus('mariage-status', 'Les deux personnes doivent être différentes.', true); return; }
+
+  const payload = {
+    personne_1_id, personne_2_id,
+    ordre: document.getElementById('m-ordre').value ? parseInt(document.getElementById('m-ordre').value) : null,
+    date_debut: document.getElementById('m-date_debut').value || null,
+    date_fin: document.getElementById('m-date_fin').value || null,
+    commentaire: document.getElementById('m-commentaire').value || null,
+  };
+
+  try {
+    let error;
+    if (id) {
+      ({ error } = await sb.from('mariages').update(payload).eq('id', id));
+    } else {
+      ({ error } = await sb.from('mariages').insert(payload));
+    }
+    if (error) throw error;
+    setStatus('mariage-status', 'Enregistré.', false);
+    resetMariageForm();
+    await loadMariages();
+  } catch (e) {
+    setStatus('mariage-status', 'Erreur : ' + e.message, true);
+  }
+}
+
+async function deleteMariage(id) {
+  if (!confirm('Supprimer ce mariage ?')) return;
+  const { error } = await sb.from('mariages').delete().eq('id', id);
+  if (error) { alert('Erreur : ' + error.message); return; }
+  await loadMariages();
+}
+
+function editMariage(m) {
+  document.getElementById('mariage-id').value = m.id;
+  const nomDe = id => nomComplet(personnesCache.find(p => p.id === id));
+  document.getElementById('mariage-form-title').textContent = 'Modifier : ' + nomDe(m.personne_1_id) + ' ⚭ ' + nomDe(m.personne_2_id);
+  document.getElementById('m-personne1').value = m.personne_1_id;
+  document.getElementById('m-personne2').value = m.personne_2_id;
+  document.getElementById('m-ordre').value = m.ordre ?? '';
+  document.getElementById('m-date_debut').value = m.date_debut || '';
+  document.getElementById('m-date_fin').value = m.date_fin || '';
+  document.getElementById('m-commentaire').value = m.commentaire || '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function loadMariages() {
+  const { data, error } = await sb.from('mariages').select('*');
+  const tbody = document.getElementById('mariages-table');
+  if (error) { tbody.innerHTML = '<tr><td colspan="5" class="empty">Erreur : ' + error.message + '</td></tr>'; return; }
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">Aucun mariage encodé pour l\'instant.</td></tr>';
+    return;
+  }
+  const persDe = id => personnesCache.find(p => p.id === id);
+  const nomDe = id => nomComplet(persDe(id));
+  tbody.innerHTML = data.map(m => {
+    const dates = [m.date_debut, m.date_fin].filter(Boolean).join(' – ');
+    return '<tr>' +
+      '<td>' + escapeHtml(nomDe(m.personne_1_id)) + '</td>' +
+      '<td>' + escapeHtml(nomDe(m.personne_2_id)) + '</td>' +
+      '<td>' + (m.ordre ?? '') + '</td>' +
+      '<td>' + escapeHtml(dates) + '</td>' +
+      '<td class="row-actions">' +
+        '<button class="btn btn-secondary small" onclick=\'editMariage(' + JSON.stringify(m).replace(/'/g, "&#39;") + ')\'>Modifier</button>' +
+        '<button class="btn btn-danger small" onclick="deleteMariage(\'' + m.id + '\')">Supprimer</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function resetFiliationForm() {
+  document.getElementById('filiation-id').value = '';
+  document.getElementById('filiation-form-title').textContent = 'Ajouter une filiation';
+  document.getElementById('f-pere_incertain').value = 'false';
+  document.getElementById('f-mere_incertaine').value = 'false';
+}
+
+async function saveFiliation() {
+  const enfant_id = document.getElementById('f-enfant').value;
+  const pere_id = document.getElementById('f-pere').value || null;
+  const mere_id = document.getElementById('f-mere').value || null;
+  const pere_incertain = document.getElementById('f-pere_incertain').value === 'true';
+  const mere_incertaine = document.getElementById('f-mere_incertaine').value === 'true';
+  if (!enfant_id) { setStatus('filiation-status', 'Choisis un enfant.', true); return; }
+
+  try {
+    const { error } = await sb.from('filiations').upsert(
+      { enfant_id, pere_id, mere_id, pere_incertain, mere_incertaine },
+      { onConflict: 'enfant_id' }
+    );
+    if (error) throw error;
+    setStatus('filiation-status', 'Enregistré.', false);
+    resetFiliationForm();
+    await loadFiliations();
+  } catch (e) {
+    setStatus('filiation-status', 'Erreur : ' + e.message, true);
+  }
+}
+
+async function deleteFiliation(id) {
+  if (!confirm('Supprimer cette filiation ?')) return;
+  const { error } = await sb.from('filiations').delete().eq('id', id);
+  if (error) { alert('Erreur : ' + error.message); return; }
+  await loadFiliations();
+}
+
+function editFiliation(f) {
+  document.getElementById('filiation-id').value = f.id;
+  const nomDe = id => { const p = personnesCache.find(p => p.id === id); return p ? nomComplet(p) : '?'; };
+  document.getElementById('filiation-form-title').textContent = 'Modifier : ' + nomDe(f.enfant_id);
+  document.getElementById('f-enfant').value = f.enfant_id;
+  document.getElementById('f-pere').value = f.pere_id || '';
+  document.getElementById('f-mere').value = f.mere_id || '';
+  document.getElementById('f-pere_incertain').value = f.pere_incertain ? 'true' : 'false';
+  document.getElementById('f-mere_incertaine').value = f.mere_incertaine ? 'true' : 'false';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function loadFiliations() {
+  const { data, error } = await sb.from('filiations').select('*');
+  const tbody = document.getElementById('filiations-table');
+  if (error) { tbody.innerHTML = '<tr><td colspan="5" class="empty">Erreur : ' + error.message + '</td></tr>'; return; }
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">Aucune filiation encodée pour l\'instant.</td></tr>';
+    return;
+  }
+  const nomDe = id => { if (!id) return '?'; const p = personnesCache.find(p => p.id === id); return p ? nomComplet(p) : '?'; };
+  tbody.innerHTML = data.map(f => {
+    const incertBits = [];
+    if (f.pere_incertain) incertBits.push('père');
+    if (f.mere_incertaine) incertBits.push('mère');
+    const incert = incertBits.length ? incertBits.join(', ') : '—';
+    return '<tr>' +
+      '<td>' + escapeHtml(nomDe(f.enfant_id)) + '</td>' +
+      '<td>' + escapeHtml(nomDe(f.pere_id)) + '</td>' +
+      '<td>' + escapeHtml(nomDe(f.mere_id)) + '</td>' +
+      '<td>' + escapeHtml(incert) + '</td>' +
+      '<td class="row-actions">' +
+        '<button class="btn btn-secondary small" onclick=\'editFiliation(' + JSON.stringify(f).replace(/'/g, "&#39;") + ')\'>Modifier</button>' +
+        '<button class="btn btn-danger small" onclick="deleteFiliation(\'' + f.id + '\')">Supprimer</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+async function init() {
+  majAffichageChampsRole();
+  await loadPersonnes();
+  await loadMariages();
+  await loadFiliations();
+}
+initConnection();
+</script>
+
+</body>
+</html>

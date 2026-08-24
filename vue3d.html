@@ -1,0 +1,1712 @@
+<!DOCTYPE html>
+<!--
+  © Origines — Tous droits réservés.
+  Cette application et son code sont une création originale d'Origines.
+  Toute reproduction, copie ou redistribution de ce fichier sans
+  autorisation est interdite.
+-->
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rois d'Égypte — Vue 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --parchemin: #F2E9D8;
+    --papier: #FBF7ED;
+    --encre: #241D18;
+    --noyer: #6B4F3B;
+    --bordeaux: #7A2E2E;
+    --sauge: #4B6350;
+    --laiton: #B08D3E;
+    --gris-texte: #4A4438;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Inter', sans-serif; }
+  body { display: flex; flex-direction: column; background: var(--parchemin); color: var(--gris-texte); }
+
+  header {
+    background: var(--encre);
+    padding: 20px 32px 16px;
+    border-bottom: 4px solid var(--laiton);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  header h1 { font-family: 'Playfair Display', serif; color: var(--parchemin); font-size: 22px; margin: 0 0 4px; }
+  header p { color: var(--laiton); margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  button.btn {
+    font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px;
+    padding: 8px 14px; border-radius: 4px; border: 1px solid var(--laiton);
+    background: transparent; color: var(--laiton); cursor: pointer;
+  }
+  button.btn:hover { background: rgba(176,141,62,0.15); }
+  button.btn.active-mode { background: var(--laiton); color: var(--encre); }
+
+  .legend {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    padding: 10px 32px; background: var(--papier);
+    border-bottom: 1px solid rgba(107,79,59,0.2);
+    font-size: 12px; flex-shrink: 0;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .swatch.homme { background: #4B6350; }
+  .swatch.femme { background: #7A2E2E; }
+  .swatch.inconnu-sexe { background: #6B4F3B; }
+  .swatch.inconnu { background: #fff; border: 1px dashed #4A4438; }
+
+  #scene-wrap { position: relative; flex: 1; min-height: 0; }
+  #three-canvas { position: absolute; inset: 0; display: block; }
+  #label-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+
+  .node-label {
+    position: absolute;
+    font-family: 'Inter', sans-serif;
+    background: var(--papier);
+    border: 1.5px solid var(--noyer);
+    border-radius: 5px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--encre);
+    white-space: nowrap;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 1px 3px rgba(36,29,24,0.2);
+    transition: opacity 0.15s ease;
+  }
+  .node-label.homme { border-color: var(--sauge); background: #8FB4DE; }
+  .node-label.femme { border-color: var(--bordeaux); background: #E6A8C4; }
+  .node-label.inconnu-sexe { border-color: var(--noyer); background: #C9BFAE; }
+  .node-label .sub { display: block; font-weight: 400; font-size: 10px; color: var(--noyer); }
+
+  /* Vue simplifiée : cercle avec initiales, sans dates ni sous-texte */
+  .node-label.simplified {
+    width: 34px; height: 34px; padding: 0; border-radius: 50%;
+    overflow: hidden; text-align: center; line-height: 34px;
+    font-size: 12px; font-weight: 700; color: #1A1410; border: none;
+    box-shadow: 0 1px 3px rgba(36,29,24,0.3);
+  }
+  .node-label.simplified.homme { background: #8FB4DE; }
+  .node-label.simplified.femme { background: #E6A8C4; }
+  .node-label.simplified.inconnu-sexe { background: #C9BFAE; }
+  .node-label.simplified.unknown { background: #fff; border: 1.5px dashed var(--gris-texte); color: var(--gris-texte); }
+
+  .marriage-label {
+    position: absolute; transform: translate(-50%, -50%);
+    font-size: 10px; color: var(--bordeaux); background: rgba(251,247,237,0.85);
+    padding: 1px 5px; border-radius: 3px; white-space: nowrap; pointer-events: none;
+    transition: opacity 0.15s ease;
+  }
+
+  #empty-msg {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: rgba(74,68,56,0.6); font-style: italic; text-align: center; padding: 20px;
+  }
+
+  #hint {
+    position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+    background: rgba(36,29,24,0.85); color: var(--parchemin); font-size: 11px;
+    padding: 6px 14px; border-radius: 20px; pointer-events: none;
+  }
+
+  #config-overlay, #arbres-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(36, 29, 24, 0.92);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+  }
+  #config-overlay.hidden, #arbres-overlay.hidden { display: none; }
+  .config-box {
+    background: var(--papier);
+    border-radius: 10px;
+    padding: 32px;
+    max-width: 460px;
+    width: 100%;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+  }
+  .config-box h2 {
+    font-family: 'Playfair Display', serif;
+    color: var(--encre);
+    margin: 0 0 6px;
+  }
+  .config-box p {
+    font-size: 14px;
+    color: var(--gris-texte);
+    margin: 0 0 18px;
+    line-height: 1.5;
+  }
+  .config-box label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin: 14px 0 4px;
+    color: var(--encre);
+  }
+  .config-box input, .config-box select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d8cbb0;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+  }
+  .config-box .config-actions {
+    margin-top: 22px;
+    display: flex;
+    gap: 10px;
+  }
+  .config-box .status {
+    margin-top: 12px;
+    font-size: 13px;
+  }
+  .config-box .status.error { color: var(--bordeaux); }
+  .config-box .status.ok { color: var(--sauge); }
+  #config-gear, .link-btn {
+    background: none;
+    border: none;
+    color: var(--laiton);
+    cursor: pointer;
+    font-size: 12px;
+    text-decoration: underline;
+    padding: 0;
+  }
+  .hint-text { font-size: 12px; color: rgba(74,68,56,0.7); }
+  .arbre-item {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 12px 0; border-bottom: 1px solid #e8dcc4;
+  }
+  .arbre-item:last-child { border-bottom: none; }
+  .arbre-item.actif { background: rgba(176,141,62,0.06); margin: 0 -14px; padding: 12px 14px; border-radius: 6px; }
+  .arbre-info strong { color: var(--encre); }
+  .arbre-url { font-size: 11px; color: var(--gris-texte); word-break: break-all; margin-top: 2px; }
+  .arbre-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .tag-actif {
+    background: var(--sauge); color: #fff; font-size: 10px; text-transform: uppercase;
+    padding: 1px 7px; border-radius: 8px; font-weight: 700; letter-spacing: 0.3px;
+  }
+  .btn.small { padding: 4px 10px; font-size: 12px; }
+  #aide-overlay {
+    position: fixed; inset: 0; background: rgba(36,29,24,0.92);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 999; padding: 20px;
+  }
+  #aide-overlay.hidden { display: none; }
+  #export-overlay {
+    position: fixed; inset: 0; background: rgba(36,29,24,0.92);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1001; padding: 20px;
+  }
+  #export-overlay.hidden { display: none; }
+  .aide-box {
+    background: var(--papier); border-radius: 10px; padding: 32px;
+    max-width: 620px; width: 100%; max-height: 85vh; overflow: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+  }
+  .aide-box h2 { font-family: 'Playfair Display', serif; color: var(--encre); margin: 0 0 6px; }
+  .aide-steps { counter-reset: step; padding: 0; margin: 0 0 20px; list-style: none; }
+  .aide-steps li {
+    counter-increment: step; position: relative; padding: 0 0 18px 40px; line-height: 1.5;
+  }
+  .aide-steps li::before {
+    content: counter(step); position: absolute; left: 0; top: 0;
+    width: 26px; height: 26px; border-radius: 50%; background: var(--noyer);
+    color: var(--papier); font-weight: 600; font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .aide-steps a { color: var(--bordeaux); }
+  .code-block-wrap { position: relative; margin: 10px 0 4px; }
+  .code-block {
+    background: var(--encre); color: #e6ddc9; padding: 16px; border-radius: 8px;
+    font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.5;
+    max-height: 280px; overflow: auto; white-space: pre;
+  }
+  .copy-btn {
+    position: absolute; top: 10px; right: 10px; background: var(--laiton);
+    color: var(--encre); border: none; border-radius: 5px; padding: 6px 12px;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .aide-box .config-actions { margin-top: 18px; }
+
+  #site-credit {
+    position: absolute;
+    bottom: 6px;
+    right: 12px;
+    font-size: 10px;
+    color: var(--gris-texte);
+    opacity: 0.55;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="auth-gate" style="position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#1B2A3A,#3a2a1a);display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Arial,sans-serif;">
+  <div style="background:#FBF6EA;border-radius:10px;padding:36px 40px;max-width:380px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.4);text-align:center;">
+    <h2 style="margin:0 0 6px;font-family:Georgia,serif;color:#1B2A3A;">𓂀 Rois d'Égypte antique</h2>
+    <p style="margin:0 0 20px;font-size:13px;color:#8B5E3C;">Accès réservé — connexion par code</p>
+    <div id="auth-step-email">
+      <input id="auth-email" type="email" placeholder="votre@email.com" style="width:100%;padding:10px;margin-bottom:12px;border:1px solid #d8cbb0;border-radius:5px;box-sizing:border-box;">
+      <button onclick="authEnvoyerCode()" style="width:100%;padding:10px;background:#1B2A3A;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:600;">Recevoir le code</button>
+    </div>
+    <div id="auth-step-code" style="display:none;">
+      <p style="font-size:12px;color:#4A3B2A;margin-bottom:10px;">Code envoyé à <strong id="auth-email-affiche"></strong></p>
+      <input id="auth-code" type="text" inputmode="numeric" maxlength="6" placeholder="123456" style="width:100%;padding:10px;margin-bottom:12px;border:1px solid #d8cbb0;border-radius:5px;box-sizing:border-box;text-align:center;font-size:20px;letter-spacing:4px;">
+      <button onclick="authValiderCode()" style="width:100%;padding:10px;background:#1B2A3A;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:600;">Valider</button>
+      <button onclick="authRetour()" style="width:100%;padding:8px;background:none;border:none;color:#8B5E3C;cursor:pointer;font-size:12px;margin-top:6px;">← Changer d'adresse</button>
+    </div>
+    <p id="auth-message" style="margin-top:14px;font-size:12px;color:#a8432e;min-height:16px;"></p>
+  </div>
+</div>
+<button id="auth-logout" onclick="authDeconnexion()" style="display:none;position:fixed;bottom:14px;right:14px;z-index:9998;padding:8px 14px;background:#fff;border:1px solid #d8cbb0;border-radius:6px;font-size:12px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.15);">🔓 Se déconnecter</button>
+
+<script>
+  var AUTH_SB = supabase.createClient(
+    'https://bhrpzizmzzmobhqvbfal.supabase.co',
+    'sb_publishable_6KGYHMGBq1p1lXE9JZwgeA_MeFBTSqm'
+  );
+
+  function authAfficherMessage(txt){ document.getElementById('auth-message').textContent = txt || ''; }
+
+  async function authEnvoyerCode(){
+    const email = document.getElementById('auth-email').value.trim();
+    if(!email){ authAfficherMessage('Entrez votre email.'); return; }
+    authAfficherMessage('Envoi en cours...');
+    const { error } = await AUTH_SB.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+    if(error){ authAfficherMessage('Erreur : ' + error.message); return; }
+    document.getElementById('auth-email-affiche').textContent = email;
+    document.getElementById('auth-step-email').style.display = 'none';
+    document.getElementById('auth-step-code').style.display = 'block';
+    authAfficherMessage('');
+  }
+
+  async function authValiderCode(){
+    const email = document.getElementById('auth-email').value.trim();
+    const token = document.getElementById('auth-code').value.trim();
+    if(!token){ authAfficherMessage('Entrez le code reçu.'); return; }
+    authAfficherMessage('Vérification...');
+    const { error } = await AUTH_SB.auth.verifyOtp({ email, token, type: 'email' });
+    if(error){ authAfficherMessage('Code invalide ou expiré.'); return; }
+    authMasquerGate();
+  }
+
+  function authRetour(){
+    document.getElementById('auth-step-code').style.display = 'none';
+    document.getElementById('auth-step-email').style.display = 'block';
+    authAfficherMessage('');
+  }
+
+  function authMasquerGate(){
+    document.getElementById('auth-gate').style.display = 'none';
+    document.getElementById('auth-logout').style.display = 'block';
+  }
+
+  async function authDeconnexion(){
+    await AUTH_SB.auth.signOut();
+    location.reload();
+  }
+
+  (async function authVerifierSession(){
+    const { data } = await AUTH_SB.auth.getSession();
+    if(data && data.session){
+      authMasquerGate();
+    }
+  })();
+</script>
+
+
+<div id="config-overlay" class="hidden">
+  <div class="config-box" style="position:relative;">
+    <button onclick="closeConfig()" aria-label="Fermer"
+      style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:20px;line-height:1;cursor:pointer;color:var(--gris-texte);">×</button>
+    <h2>🌿 Connexion à votre base</h2>
+    <p>Cette application affiche vos données à partir de votre propre projet Supabase (gratuit). Entrez ici l'URL et la clé « publishable » de votre projet. Besoin de les créer d'abord ? Voir le mode d'emploi.</p>
+    <label for="cfg-url">URL du projet Supabase</label>
+    <input type="text" id="cfg-url" placeholder="https://xxxxxxxx.supabase.co" oninput="saveConfigDraft()">
+    <label for="cfg-key">Clé publishable (anon)</label>
+    <input type="text" id="cfg-key" placeholder="sb_publishable_..." oninput="saveConfigDraft()">
+    <div class="config-actions">
+      <button class="btn" style="background:var(--noyer);color:var(--papier);" onclick="saveConfig()">Se connecter</button>
+      <button class="btn" onclick="openAide()">Mode d'emploi</button>
+    </div>
+    <div class="status" id="config-status"></div>
+  </div>
+</div>
+
+<div id="arbres-overlay" class="hidden">
+  <div class="config-box" style="position:relative; max-width:520px;">
+    <button onclick="closeArbres()" aria-label="Fermer"
+      style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:20px;line-height:1;cursor:pointer;color:var(--gris-texte);">×</button>
+    <h2>🌳 Mes arbres</h2>
+    <p>Les arbres auxquels vous vous êtes déjà connecté·e sur <strong>ce navigateur</strong>. Cliquez sur « Utiliser » pour basculer instantanément de l'un à l'autre.</p>
+    <div id="arbres-list"></div>
+    <p class="hint-text" style="margin-top:16px;">Cette liste est partagée avec l'application d'encodage et la vue 2D.</p>
+  </div>
+</div>
+
+<div id="aide-overlay" class="hidden">
+  <div class="aide-box">
+    <h2>Créer votre propre base de généalogie</h2>
+    <p>Cette application ne stocke rien elle-même : vos données vivent dans votre propre projet Supabase (gratuit), séparé et privé. Suivez ces étapes une seule fois.</p>
+    <ol class="aide-steps">
+      <li>Créez un compte gratuit sur <a href="https://supabase.com" target="_blank" rel="noopener">supabase.com</a> (bouton « Start your project »), puis créez un nouveau projet.</li>
+      <li>Ouvrez le menu <strong>SQL Editor</strong> dans la barre latérale gauche, puis <strong>New query</strong>.</li>
+      <li>Copiez le script ci-dessous, collez-le dans l'éditeur, puis cliquez sur <strong>Run</strong>. Les 3 tables nécessaires sont créées d'un coup.</li>
+      <li>Allez dans <strong>Project Settings ⚙ → API Keys</strong>. Notez l'<strong>URL du projet</strong> et la <strong>clé « publishable »</strong>.</li>
+      <li>Revenez sur cette page et collez ces deux valeurs dans l'écran de connexion.</li>
+    </ol>
+    <div class="code-block-wrap">
+      <button class="copy-btn" onclick="copySqlScript()">Copier</button>
+      <pre class="code-block" id="sql-script">-- ============================================================
+-- Script de création des tables — Généalogie familiale
+-- ============================================================
+-- MODE D&#x27;EMPLOI :
+-- 1. Ouvrez votre projet sur https://supabase.com
+-- 2. Dans le menu de gauche, cliquez sur &quot;SQL Editor&quot;
+-- 3. Cliquez sur &quot;New query&quot;
+-- 4. Collez tout ce fichier, puis cliquez sur &quot;Run&quot;
+-- Les 3 tables sont créées en une seule fois.
+-- ============================================================
+
+create extension if not exists &quot;pgcrypto&quot;;
+
+-- Table des personnes -------------------------------------------------
+create table if not exists personnes (
+  id uuid primary key default gen_random_uuid(),
+  nom text not null,
+  prenom text,
+  autres_prenoms text,
+  sexe text,
+  date_naissance text,
+  date_deces text,
+  ville_naissance text,
+  pays_naissance text,
+  commentaire_1 text,
+  commentaire_2 text,
+  commentaire_3 text,
+  created_at timestamptz default now()
+);
+
+-- Table des mariages ----------------------------------------------------
+create table if not exists mariages (
+  id uuid primary key default gen_random_uuid(),
+  personne_1_id uuid not null references personnes(id) on delete cascade,
+  personne_2_id uuid not null references personnes(id) on delete cascade,
+  ordre integer,
+  date_debut text,
+  date_fin text,
+  commentaire text,
+  created_at timestamptz default now()
+);
+
+-- Table des filiations ----------------------------------------------------
+-- (un enfant n&#x27;a qu&#x27;une seule ligne de filiation, d&#x27;où &quot;unique&quot;)
+create table if not exists filiations (
+  id uuid primary key default gen_random_uuid(),
+  enfant_id uuid not null unique references personnes(id) on delete cascade,
+  pere_id uuid references personnes(id) on delete set null,
+  mere_id uuid references personnes(id) on delete set null,
+  pere_incertain boolean default false,
+  mere_incertaine boolean default false,
+  created_at timestamptz default now()
+);
+
+-- ============================================================
+-- Sécurité (RLS)
+-- ============================================================
+-- Supabase active la sécurité au niveau des lignes par défaut, ce qui
+-- bloque tout accès tant qu&#x27;aucune règle n&#x27;est définie. Ces règles
+-- autorisent l&#x27;app (via la clé &quot;publishable&quot;) à lire/écrire librement —
+-- adapté à un usage personnel où chaque utilisateur a son propre projet.
+
+alter table personnes enable row level security;
+alter table mariages enable row level security;
+alter table filiations enable row level security;
+
+create policy &quot;Accès complet personnes&quot; on personnes
+  for all using (true) with check (true);
+
+create policy &quot;Accès complet mariages&quot; on mariages
+  for all using (true) with check (true);
+
+create policy &quot;Accès complet filiations&quot; on filiations
+  for all using (true) with check (true);</pre>
+    </div>
+    <div class="status" id="aide-copy-status"></div>
+    <div class="config-actions">
+      <button class="btn" onclick="closeAide()">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<div id="export-overlay" class="hidden">
+  <div class="config-box">
+    <h2>📤 Générer une vue figée</h2>
+    <p>Crée un fichier autonome (données intégrées, aucune connexion à votre base) centré sur la personne choisie. Toujours navigable en 3D, mais non modifiable — idéal à partager ou publier ailleurs.</p>
+    <label for="export-person-select">Personne à mettre en avant</label>
+    <select id="export-person-select"></select>
+    <div class="config-actions">
+      <button class="btn" style="background:var(--noyer);color:var(--papier);" onclick="generateFrozenView()">Générer et télécharger</button>
+      <button class="btn" onclick="closeExportPanel()">Annuler</button>
+    </div>
+    <div class="status" id="export-status"></div>
+  </div>
+</div>
+
+<header>
+  <div>
+    <h1>𓂀 Rois d'Égypte antique</h1>
+    <p>Visualisation 3D · v2.00 &nbsp;·&nbsp; <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button> &nbsp;·&nbsp; <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button> &nbsp;·&nbsp; <a href="encodage.html" style="color:var(--laiton);text-decoration:underline;font-size:13px;">✏️ Retour à l'encodage</a> &nbsp;·&nbsp; <a href="vue2d.html" style="color:var(--laiton);text-decoration:underline;font-size:13px;">📐 Vue 2D</a></p>
+    <div style="position:relative; margin-top:6px; max-width:260px;">
+      <input type="text" id="personne-search" placeholder="🔎 Rechercher une personne..."
+        style="width:100%; padding:6px 10px; border:1px solid #d8cbb0; border-radius:6px; font-family:inherit; font-size:12px;"
+        oninput="filtrerRecherchePersonne()" onfocus="filtrerRecherchePersonne()">
+      <div id="personne-search-results" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--papier); border:1px solid #d8cbb0; border-radius:6px; margin-top:2px; max-height:220px; overflow-y:auto; z-index:50; box-shadow:0 4px 12px rgba(0,0,0,0.15);"></div>
+    </div>
+  </div>
+  <button class="btn" onclick="loadAndRender()">Rafraîchir</button>
+  <button class="btn" onclick="topView()">Vue de dessus</button>
+  <button class="btn" id="simplified-btn" onclick="toggleSimplified()">Vue simplifiée</button>
+  <button class="btn" id="reset-view-btn" style="display:none;" onclick="resetView()">Vue d'ensemble</button>
+  <button class="btn" onclick="openExportPanel()">📤 Générer une vue figée</button>
+</header>
+
+<div class="legend">
+  <span class="legend-item"><span class="swatch homme"></span> Homme</span>
+  <span class="legend-item"><span class="swatch femme"></span> Femme</span>
+  <span class="legend-item"><span class="swatch inconnu-sexe"></span> Sexe non précisé</span>
+  <span class="legend-item"><span class="swatch inconnu"></span> Parent inconnu (?)</span>
+  <span class="legend-item">— Ligne rouge = mariage · Ligne brune = filiation</span>
+  <span class="legend-item">— Filiation brune pointillée = lien incertain (père ou mère)</span>
+</div>
+
+<div id="scene-wrap">
+  <canvas id="three-canvas"></canvas>
+  <div id="label-layer"></div>
+  <div id="empty-msg">Chargement...</div>
+  <div id="hint" style="display:none;">Glisser = orbiter · Molette = zoomer · Clic droit + glisser = déplacer · Survoler = isoler une branche · Cliquer = centrer sur le voisinage · "Vue d'ensemble" = tout réafficher</div>
+  <div id="site-credit">© Origines</div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { createClient } from '@supabase/supabase-js';
+
+const LS_URL_KEY = 'genealogie_supabase_url';
+const LS_ANON_KEY = 'genealogie_supabase_key';
+const LS_ARBRES_KEY = 'genealogie_arbres';
+const LS_ACTIF_KEY = 'genealogie_arbre_actif';
+const LS_DRAFT_KEY = 'genealogie_connexion_brouillon';
+let sb = null;
+
+const wrap = document.getElementById('scene-wrap');
+const canvas = document.getElementById('three-canvas');
+const labelLayer = document.getElementById('label-layer');
+const emptyMsg = document.getElementById('empty-msg');
+const hint = document.getElementById('hint');
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xF2E9D8);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+camera.position.set(10, 9, 18);
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 1.5;
+controls.maxDistance = 220;
+controls.zoomSpeed = 0.4;
+
+const DEFAULT_CAMERA_POS = camera.position.clone();
+const DEFAULT_TARGET = new THREE.Vector3(0, 0, 0);
+const FOCUS_OFFSET = new THREE.Vector3(5, 4, 8);
+const resetViewBtn = document.getElementById('reset-view-btn');
+
+function focusOnPerson(id) {
+  const pos = lastPositions[id];
+  if (!pos) return;
+  const target = new THREE.Vector3(pos.x, pos.y, pos.z);
+  controls.target.copy(target);
+  camera.position.copy(target).add(FOCUS_OFFSET);
+  controls.update();
+  resetViewBtn.style.display = 'inline-block';
+}
+
+function resetView() {
+  controls.target.copy(DEFAULT_TARGET);
+  camera.position.copy(DEFAULT_CAMERA_POS);
+  controls.update();
+  resetViewBtn.style.display = 'none';
+  clearSelection();
+}
+window.resetView = resetView;
+let lastPositions = {};
+
+function topView() {
+  const target = controls.target.clone();
+  const distance = Math.max(camera.position.distanceTo(target), 15);
+  camera.position.set(target.x, target.y + distance, target.z + 0.0001);
+  controls.update();
+  resetViewBtn.style.display = 'inline-block';
+}
+window.topView = topView;
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+dirLight.position.set(5, 10, 7);
+scene.add(dirLight);
+
+function resize() {
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+window.addEventListener('resize', resize);
+
+let contentGroup = new THREE.Group();
+scene.add(contentGroup);
+let labelEls = []; // { el, obj3d (THREE.Object3D dont on lit .position) }
+let marriageLabelEls = [];
+
+function clearScene() {
+  scene.remove(contentGroup);
+  contentGroup.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) o.material.dispose();
+  });
+  contentGroup = new THREE.Group();
+  scene.add(contentGroup);
+  labelEls.forEach(l => l.el.remove());
+  labelEls = [];
+  marriageLabelEls.forEach(l => l.el.remove());
+  marriageLabelEls = [];
+  lineRegistry = [];
+  labelIdOf = new Map();
+}
+
+const SEXE_COLOR = { Homme: 0x4B6350, Femme: 0x7A2E2E };
+const SEXE_COLOR_DEFAULT = 0x6B4F3B;
+
+const BRANCH_PALETTE = [0x4B6350, 0x7A2E2E, 0xB08D3E, 0x3B5B73, 0x6B4F9E, 0x8A5A2B, 0x2E6B6B, 0x8E3B5E, 0x5B6B2E, 0x3E5E8E];
+function colorForGroup(key) {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return BRANCH_PALETTE[h % BRANCH_PALETTE.length];
+}
+
+let lineRegistry = [];
+let labelIdOf = new Map(); // el -> personId (uniquement pour les personnes, pas les "?")
+
+let currentSelectionId = null;
+let relationGraph = { spousesOf: {}, filByChild: {}, childrenByParent: {} };
+
+let simplifiedMode = false;
+const simplifiedBtn = document.getElementById('simplified-btn');
+
+function renderLabelEntry(entry) {
+  if (simplifiedMode) {
+    entry.el.className = entry.baseClass + ' simplified';
+    entry.el.innerHTML = entry.simpleHtml;
+    entry.el.title = entry.tooltipText || '';
+  } else {
+    entry.el.className = entry.baseClass;
+    entry.el.innerHTML = entry.fullHtml;
+    entry.el.title = '';
+  }
+  if (entry.obj3d) entry.obj3d.visible = false;
+}
+
+function toggleSimplified() {
+  simplifiedMode = !simplifiedMode;
+  simplifiedBtn.classList.toggle('active-mode', simplifiedMode);
+  labelEls.forEach(renderLabelEntry);
+}
+window.toggleSimplified = toggleSimplified;
+
+const NEI_MAX_UP = 3, NEI_MAX_DOWN = 3, NEI_MAX_SIZE = 120;
+
+function buildNeighborhood(startId) {
+  const { spousesOf, filByChild, childrenByParent } = relationGraph;
+  const included = new Set([startId]);
+  const genOffset = new Map([[startId, 0]]);
+  const queue = [startId];
+  while (queue.length && included.size < NEI_MAX_SIZE) {
+    const cur = queue.shift();
+    const g = genOffset.get(cur);
+    (spousesOf[cur] || []).forEach(sid => {
+      if (included.has(sid)) return;
+      included.add(sid); genOffset.set(sid, g); queue.push(sid);
+    });
+    const f = filByChild[cur];
+    if (f && g > -NEI_MAX_UP) {
+      [f.pere_id, f.mere_id].filter(Boolean).forEach(pid => {
+        if (included.has(pid)) return;
+        included.add(pid); genOffset.set(pid, g - 1); queue.push(pid);
+      });
+    }
+    if (g < NEI_MAX_DOWN) {
+      (childrenByParent[cur] || []).forEach(cid => {
+        if (included.has(cid)) return;
+        included.add(cid); genOffset.set(cid, g + 1); queue.push(cid);
+      });
+    }
+  }
+  return included;
+}
+
+function applySelectionFilter(neighborhood) {
+  lineRegistry.forEach(entry => {
+    const on = !neighborhood || [...entry.ids].some(id => neighborhood.has(id));
+    entry.baseOpacity = on ? entry.defaultOpacity : 0.05;
+    entry.mesh.material.opacity = entry.baseOpacity;
+  });
+  labelEls.forEach(entry => {
+    const id = labelIdOf.get(entry.el);
+    const on = !neighborhood || (id !== undefined && neighborhood.has(id));
+    entry.baseOpacity = on ? 1 : 0.08;
+    entry.el.style.opacity = String(entry.baseOpacity);
+  });
+}
+
+function selectPerson(personId) {
+  currentSelectionId = personId;
+  applySelectionFilter(buildNeighborhood(personId));
+  focusOnPerson(personId);
+}
+
+function clearSelection() {
+  currentSelectionId = null;
+  applySelectionFilter(null);
+}
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function nomComplet(p) {
+  if (!p) return '?';
+  return p.nom_usuel || '?';
+}
+
+const ROLE_LABEL_3D = { roi: 'Roi/Pharaon', femme: 'Femme', enfant: 'Enfant' };
+
+function subFor(p) {
+  const regne = [p.regne_debut, p.regne_fin].filter(Boolean).join(' – ');
+  if (regne) return regne;
+  if (p.dynastie) return p.dynastie;
+  return ROLE_LABEL_3D[p.role] || '';
+}
+
+function sexeClass(p) {
+  if (p.sexe === 'Homme') return 'homme';
+  if (p.sexe === 'Femme') return 'femme';
+  return 'inconnu-sexe';
+}
+
+function initiales(p) {
+  const mots = (p.nom_usuel || '').trim().split(/\s+/);
+  const a = (mots[0] || '').charAt(0).toUpperCase();
+  const b = (mots[1] || '').charAt(0).toUpperCase();
+  return (a + b) || a || '?';
+}
+
+function addLabel(baseClass, fullHtml, simpleHtml, obj3d, personId, tooltipText) {
+  const el = document.createElement('div');
+  el.style.pointerEvents = 'auto';
+  labelLayer.appendChild(el);
+  const entry = { el, obj3d, baseOpacity: 1, baseClass, fullHtml, simpleHtml, tooltipText };
+  labelEls.push(entry);
+  renderLabelEntry(entry);
+  if (personId) {
+    labelIdOf.set(el, personId);
+    el.addEventListener('mouseenter', () => { if (!simplifiedMode) highlightPerson(personId); });
+    el.addEventListener('mouseleave', () => { if (!simplifiedMode) clearHighlight(); });
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', () => selectPerson(personId));
+  }
+  return el;
+}
+
+function highlightPerson(personId) {
+  lineRegistry.forEach(entry => {
+    const on = entry.ids.has(personId);
+    entry.mesh.material.opacity = on ? 1 : Math.min(entry.baseOpacity, 0.08);
+    if (entry.mesh.material.linewidth !== undefined) entry.mesh.material.linewidth = on ? 2 : 1;
+  });
+  labelEls.forEach(entry => {
+    const id = labelIdOf.get(entry.el);
+    if (id === undefined) { entry.el.style.opacity = String(Math.min(entry.baseOpacity, 0.25)); return; }
+    entry.el.style.opacity = (id === personId) ? '1' : String(Math.min(entry.baseOpacity, 0.25));
+  });
+  marriageLabelEls.forEach(({ el }) => { el.style.opacity = '0.15'; });
+}
+
+function clearHighlight() {
+  lineRegistry.forEach(entry => { entry.mesh.material.opacity = entry.baseOpacity; });
+  labelEls.forEach(entry => { entry.el.style.opacity = String(entry.baseOpacity); });
+  marriageLabelEls.forEach(({ el }) => { el.style.opacity = '1'; });
+}
+
+function addMarriageLabel(text, position) {
+  const el = document.createElement('div');
+  el.className = 'marriage-label';
+  el.textContent = text;
+  labelLayer.appendChild(el);
+  marriageLabelEls.push({ el, position });
+}
+
+let currentData = { personnes: [], mariages: [], filiations: [] };
+
+async function loadAndRender() {
+  emptyMsg.style.display = 'flex';
+  emptyMsg.textContent = 'Chargement...';
+  hint.style.display = 'none';
+  clearScene();
+  resetView();
+
+  let personnes, mariages, filiations;
+  if (window.EMBEDDED_DATA) {
+    personnes = window.EMBEDDED_DATA.personnes || [];
+    mariages = window.EMBEDDED_DATA.mariages || [];
+    filiations = window.EMBEDDED_DATA.filiations || [];
+  } else {
+    const [{ data: p, error: e1 }, { data: m, error: e2 }, { data: f, error: e3 }] =
+      await Promise.all([
+        sb.from('personnes').select('*'),
+        sb.from('mariages').select('*'),
+        sb.from('filiations').select('*'),
+      ]);
+    if (e1 || e2 || e3) {
+      emptyMsg.textContent = 'Erreur de chargement : ' + (e1 || e2 || e3).message;
+      return;
+    }
+    personnes = p; mariages = m || []; filiations = f || [];
+  }
+
+  currentData = { personnes: personnes || [], mariages: mariages || [], filiations: filiations || [] };
+
+  if (!personnes || personnes.length === 0) {
+    emptyMsg.textContent = "Aucune personne encodée pour l'instant.";
+    return;
+  }
+
+  build3DTree(personnes, mariages || [], filiations || []);
+  emptyMsg.style.display = 'none';
+  hint.style.display = 'block';
+
+  if (window.EMBEDDED_FOCUS_ID) {
+    selectPerson(window.EMBEDDED_FOCUS_ID);
+  }
+}
+
+function build3DTree(personnes, mariages, filiations) {
+  const byId = {};
+  personnes.forEach(p => byId[p.id] = p);
+
+  const filByChild = {};
+  filiations.forEach(f => filByChild[f.enfant_id] = f);
+
+  const bloodConnected = new Set();
+  filiations.forEach(f => {
+    bloodConnected.add(f.enfant_id);
+    if (f.pere_id) bloodConnected.add(f.pere_id);
+    if (f.mere_id) bloodConnected.add(f.mere_id);
+  });
+
+  const spousesOf = {};
+  mariages.forEach(m => {
+    (spousesOf[m.personne_1_id] = spousesOf[m.personne_1_id] || []).push(m.personne_2_id);
+    (spousesOf[m.personne_2_id] = spousesOf[m.personne_2_id] || []).push(m.personne_1_id);
+  });
+
+  const genCache = {};
+  function rawGen(id, seen) {
+    if (genCache[id] !== undefined) return genCache[id];
+    if (seen.has(id)) return 0;
+    seen.add(id);
+    const f = filByChild[id];
+    if (!f) { genCache[id] = 0; return 0; }
+    let g = -1;
+    if (f.pere_id && byId[f.pere_id]) g = Math.max(g, rawGen(f.pere_id, seen));
+    if (f.mere_id && byId[f.mere_id]) g = Math.max(g, rawGen(f.mere_id, seen));
+    const result = g === -1 ? 0 : g + 1;
+    genCache[id] = result;
+    return result;
+  }
+  personnes.forEach(p => rawGen(p.id, new Set()));
+  for (let pass = 0; pass < 4; pass++) {
+    mariages.forEach(m => {
+      const g = Math.max(genCache[m.personne_1_id] ?? 0, genCache[m.personne_2_id] ?? 0);
+      genCache[m.personne_1_id] = g;
+      genCache[m.personne_2_id] = g;
+    });
+  }
+
+  const byGen = {};
+  personnes.forEach(p => {
+    const g = genCache[p.id] ?? 0;
+    (byGen[g] = byGen[g] || []).push(p.id);
+  });
+
+  function findComponents(rowIds) {
+    const rowSet = new Set(rowIds);
+    const visited = new Set();
+    const components = [];
+    rowIds.forEach(id => {
+      if (visited.has(id)) return;
+      const comp = [];
+      const stack = [id];
+      visited.add(id);
+      while (stack.length) {
+        const cur = stack.pop();
+        comp.push(cur);
+        (spousesOf[cur] || []).forEach(sid => {
+          if (rowSet.has(sid) && !visited.has(sid)) { visited.add(sid); stack.push(sid); }
+        });
+      }
+      components.push(comp);
+    });
+    return components;
+  }
+
+  const rootCache = {};
+  function rootOf(id, seen) {
+    if (rootCache[id] !== undefined) return rootCache[id];
+    if (seen.has(id)) return id;
+    seen.add(id);
+    const f = filByChild[id];
+    let root = id;
+    if (f && f.pere_id && byId[f.pere_id]) root = rootOf(f.pere_id, seen);
+    else if (f && f.mere_id && byId[f.mere_id]) root = rootOf(f.mere_id, seen);
+    rootCache[id] = root;
+    return root;
+  }
+  personnes.forEach(p => rootOf(p.id, new Set()));
+
+  const rootAdjacency = {};
+  function linkRoots(a, b) {
+    if (a === b) return;
+    (rootAdjacency[a] = rootAdjacency[a] || new Set()).add(b);
+    (rootAdjacency[b] = rootAdjacency[b] || new Set()).add(a);
+  }
+  mariages.forEach(m => {
+    linkRoots(rootOf(m.personne_1_id, new Set()), rootOf(m.personne_2_id, new Set()));
+  });
+
+  const laneIndex = {};
+  {
+    const allRoots = [...new Set(personnes.map(p => rootOf(p.id, new Set())))];
+    const visited = new Set();
+    let next = 0;
+    allRoots.forEach(root => {
+      if (visited.has(root)) return;
+      const queue = [root];
+      visited.add(root);
+      while (queue.length) {
+        const cur = queue.shift();
+        laneIndex[cur] = next++;
+        (rootAdjacency[cur] ? [...rootAdjacency[cur]] : []).forEach(nb => {
+          if (!visited.has(nb)) { visited.add(nb); queue.push(nb); }
+        });
+      }
+    });
+  }
+  function rootLaneOf(id) { return laneIndex[rootOf(id, new Set())] ?? 0; }
+  function laneKeyOf(comp) {
+    const bloodMembers = comp.filter(id => bloodConnected.has(id));
+    const lanes = (bloodMembers.length ? bloodMembers : comp).map(rootLaneOf);
+    return lanes.reduce((a, b) => a + b, 0) / lanes.length;
+  }
+
+  const CLUSTER_GAP = 8.0, ROW_GAP = 3.6, SPOUSE_RADIUS = 3.0;
+
+  const generations = Object.keys(byGen).map(Number).sort((a, b) => a - b);
+  const positions = {}; // id -> {x,y,z}
+
+  generations.forEach((g, gi) => {
+    const rowIds = byGen[g];
+    const y = -gi * ROW_GAP;
+
+    if (g === 0) {
+      const ROOT_Z_STAGGER = 4.0;
+      const components = findComponents(rowIds).sort((a, b) => laneKeyOf(a) - laneKeyOf(b));
+      let prevRightEdge = null;
+      components.forEach((comp, idx) => {
+        const anchor = comp.find(id => bloodConnected.has(id)) || comp[0];
+        const satellites = comp.filter(id => id !== anchor);
+        const width = 2 * SPOUSE_RADIUS;
+        const leftEdge = prevRightEdge === null ? 0 : prevRightEdge + CLUSTER_GAP;
+        const x = leftEdge + width / 2;
+        const z = (idx - (components.length - 1) / 2) * ROOT_Z_STAGGER;
+        positions[anchor] = { x, y, z };
+        const n = satellites.length;
+        satellites.forEach((sid, i) => {
+          const angle = (2 * Math.PI * i) / n;
+          positions[sid] = { x: x + SPOUSE_RADIUS * Math.cos(angle), y, z: z + SPOUSE_RADIUS * Math.sin(angle) };
+        });
+        prevRightEdge = leftEdge + width;
+      });
+      return;
+    }
+
+    const bloodRow = rowIds.filter(id => filByChild[id]);
+    const nonBloodRow = rowIds.filter(id => !filByChild[id]);
+
+    const familyGroups = {};
+    bloodRow.forEach(id => {
+      const f = filByChild[id];
+      const key = (f.pere_id || 'unk') + '|' + (f.mere_id || 'unk');
+      (familyGroups[key] = familyGroups[key] || []).push(id);
+    });
+
+    function unionOf(key) {
+      const [pereId, mereId] = key.split('|');
+      const pp = positions[pereId], pm = positions[mereId];
+      if (pp && pm) {
+        // Les 2 positions ne sont moyennées que si père et mère sont
+        // effectivement mariés entre eux. Sinon (2 personnes isolées, sans
+        // rapport l'une avec l'autre — ex. un père incertain et une mère
+        // jamais unis dans les données), moyenner leurs positions n'a pas
+        // de sens et peut placer le point d'ancrage n'importe où, y
+        // compris près d'une tierce personne sans lien réel. On ancre
+        // alors sur le parent le plus certain pour cet enfant précis (si
+        // l'un des deux liens est marqué incertain et l'autre non), sinon
+        // sur le père par défaut.
+        const sontMaries = (spousesOf[pereId] || []).includes(mereId);
+        if (sontMaries) {
+          return { x: (pp.x + pm.x) / 2, z: (pp.z + pm.z) / 2 };
+        }
+        const exemple = (familyGroups[key] || []).map(cid => filByChild[cid]).find(Boolean);
+        if (exemple && exemple.pere_incertain && !exemple.mere_incertaine) return { x: pm.x, z: pm.z };
+        return { x: pp.x, z: pp.z };
+      }
+      const pts = [pp, pm].filter(Boolean);
+      if (!pts.length) return null;
+      return { x: pts[0].x, z: pts[0].z };
+    }
+
+    const SPOUSE_ORBIT = 1.6;
+    const groups = Object.keys(familyGroups).map(key => {
+      const children = familyGroups[key];
+      let extra = 0;
+      children.forEach(cid => (spousesOf[cid] || []).forEach(sid => { if (nonBloodRow.includes(sid)) extra++; }));
+      const radius = Math.max(2.6, (children.length + extra) * 0.7);
+      const outerRadius = extra > 0 ? radius + SPOUSE_ORBIT : radius;
+      return { key, children, radius, outerRadius, union: unionOf(key) };
+    });
+
+    groups.sort((a, b) => {
+      const da = a.union ? a.union.x : null, db = b.union ? b.union.x : null;
+      if (da !== null && db !== null && da !== db) return da - db;
+      if (da !== null && db === null) return -1;
+      if (da === null && db !== null) return 1;
+      return rootLaneOf(a.children[0]) - rootLaneOf(b.children[0]);
+    });
+
+    function angleDiff(a, b) {
+      let d = ((a - b + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+      return Math.abs(d);
+    }
+
+    function clearanceAt(px, pz, ownKey) {
+      const others = groups.filter(g => g.key !== ownKey && g.union);
+      if (!others.length) return Infinity;
+      return Math.min(...others.map(g => Math.hypot(px - g.union.x, pz - g.union.z) - g.outerRadius));
+    }
+
+    function distPointToSegment(px, pz, ax, az, bx, bz) {
+      const dx = bx - ax, dz = bz - az;
+      const lenSq = dx * dx + dz * dz;
+      if (lenSq === 0) return Math.hypot(px - ax, pz - az);
+      let t = ((px - ax) * dx + (pz - az) * dz) / lenSq;
+      t = Math.max(0, Math.min(1, t));
+      return Math.hypot(px - (ax + t * dx), pz - (az + t * dz));
+    }
+
+    function pathClearance(ax, az, bx, bz, excludeKeys) {
+      const others = groups.filter(g => !excludeKeys.includes(g.key) && g.union);
+      if (!others.length) return Infinity;
+      return Math.min(...others.map(g => distPointToSegment(g.union.x, g.union.z, ax, az, bx, bz) - g.outerRadius));
+    }
+
+    const CLEAR_ENOUGH = 1.5;
+    function bestAngle(candidates, cx, cz, radius, ownKey, targetAngle, targetGroup) {
+      const scored = candidates.map(a => {
+        const px = cx + radius * Math.cos(a), pz = cz + radius * Math.sin(a);
+        const clearance = targetGroup
+          ? pathClearance(px, pz, targetGroup.union.x, targetGroup.union.z, [ownKey, targetGroup.key])
+          : clearanceAt(px, pz, ownKey);
+        return { a, clearance, diff: angleDiff(a, targetAngle) };
+      });
+      const comfortable = scored.filter(s => s.clearance >= CLEAR_ENOUGH);
+      if (comfortable.length) {
+        comfortable.sort((x, y) => x.diff - y.diff);
+        return comfortable[0].a;
+      }
+      scored.sort((x, y) => y.clearance - x.clearance);
+      return scored[0].a;
+    }
+
+    const ANGLE_OFFSETS = [0, 30, -30, 60, -60, 90, -90, 120, -120, 150, -150, 180].map(d => d * Math.PI / 180);
+
+    let prevRightEdge = null;
+    groups.forEach(group => {
+      const width = group.outerRadius * 2;
+      const desired = group.union ? group.union.x : null;
+      const cx = desired !== null ? desired : (prevRightEdge === null ? 0 : prevRightEdge + CLUSTER_GAP) + width / 2;
+      const leftEdge = cx - width / 2;
+      const cz = group.union ? group.union.z : 0;
+      const n = group.children.length;
+
+      let orderedChildren = group.children;
+      if (n > 1) {
+        const bridgingIdx = group.children.findIndex(cid => (spousesOf[cid] || []).some(sid =>
+          bloodConnected.has(sid) && rootOf(sid, new Set()) !== rootOf(cid, new Set())));
+        if (bridgingIdx !== -1) {
+          const cid = group.children[bridgingIdx];
+          const spouseId = (spousesOf[cid] || []).find(sid =>
+            bloodConnected.has(sid) && rootOf(sid, new Set()) !== rootOf(cid, new Set()));
+          const spouseGroup = groups.find(g => g.children.includes(spouseId));
+          const targetAngle = (spouseGroup && spouseGroup.union)
+            ? Math.atan2(spouseGroup.union.z - cz, spouseGroup.union.x - cx)
+            : (rootLaneOf(spouseId) > rootLaneOf(cid) ? 0 : Math.PI);
+
+          const slotAngles = Array.from({ length: n }, (_, i) => (2 * Math.PI * i) / n);
+          const chosenAngle = bestAngle(slotAngles, cx, cz, group.radius, group.key, targetAngle, spouseGroup);
+          const bestSlot = Math.round(chosenAngle * n / (2 * Math.PI)) % n;
+
+          const rest = group.children.filter((_, idx) => idx !== bridgingIdx);
+          const arr = new Array(n);
+          arr[(bestSlot + n) % n] = cid;
+          let ri = 0;
+          for (let i = 0; i < n; i++) { if (i !== (bestSlot + n) % n) arr[i] = rest[ri++]; }
+          orderedChildren = arr;
+        }
+      }
+
+      orderedChildren.forEach((cid, i) => {
+        const angle = (2 * Math.PI * i) / n;
+        const px = cx + group.radius * Math.cos(angle);
+        const pz = cz + group.radius * Math.sin(angle);
+        positions[cid] = { x: px, y, z: pz };
+        // Toutes les épouses de CE roi sont réparties également sur le
+        // cercle complet autour de lui — comme des points équidistants sur
+        // un cercle dont le roi serait le centre. Le créneau angulaire de
+        // chacune est calculé par rapport au nombre TOTAL de conjoints
+        // (même ceux positionnés ailleurs, près de leur propre famille, et
+        // reliés par un pont plutôt que physiquement à côté du roi) — pas
+        // seulement celles placées ici — pour que 2 épouses réservent bien
+        // les 2 côtés opposés, même si l'une des deux finit par ne pas
+        // apparaître physiquement à cet endroit précis.
+        const tousLesConjoints = spousesOf[cid] || [];
+        const nTousConjoints = tousLesConjoints.length || 1;
+        const epousesAPlacer = tousLesConjoints.filter(sid => nonBloodRow.includes(sid) && !positions[sid]);
+        epousesAPlacer.forEach(sid => {
+          const wi = tousLesConjoints.indexOf(sid);
+          const outR = group.radius + SPOUSE_ORBIT;
+          const angleCible = angle + (2 * Math.PI * wi) / nTousConjoints;
+          const spouseAngle = bestAngle(ANGLE_OFFSETS.map(off => angleCible + off), cx, cz, outR, group.key, angleCible);
+          positions[sid] = { x: cx + outR * Math.cos(spouseAngle), y, z: cz + outR * Math.sin(spouseAngle) };
+        });
+      });
+
+      prevRightEdge = leftEdge + width;
+    });
+
+    nonBloodRow.forEach(id => {
+      if (positions[id]) return;
+      const leftEdge = prevRightEdge === null ? 0 : prevRightEdge + CLUSTER_GAP;
+      positions[id] = { x: leftEdge + SPOUSE_RADIUS, y, z: 0 };
+      prevRightEdge = leftEdge + 2 * SPOUSE_RADIUS;
+    });
+  });
+
+  const childrenByParent = {};
+  filiations.forEach(f => {
+    if (f.pere_id) (childrenByParent[f.pere_id] = childrenByParent[f.pere_id] || []).push(f.enfant_id);
+    if (f.mere_id) (childrenByParent[f.mere_id] = childrenByParent[f.mere_id] || []).push(f.enfant_id);
+  });
+
+  relationGraph = { spousesOf, filByChild, childrenByParent };
+
+  function cascadeShift(personId, dx, dz, visited) {
+    if (visited.has(personId) || !positions[personId]) return;
+    visited.add(personId);
+    positions[personId].x += dx;
+    positions[personId].z += dz;
+    (childrenByParent[personId] || []).forEach(childId => {
+      cascadeShift(childId, dx / 2, dz / 2, visited);
+    });
+  }
+
+  function optimizeSatelliteBranches() {
+    const subtreeOf = {}; // racine -> [id de chaque personne de cette lignée]
+    personnes.forEach(p => {
+      const r = rootOf(p.id, new Set());
+      (subtreeOf[r] = subtreeOf[r] || []).push(p.id);
+    });
+
+    Object.keys(subtreeOf).forEach(R => {
+      const memberIds = subtreeOf[R];
+      const members = new Set(memberIds);
+
+      const bridges = mariages.filter(m =>
+        (members.has(m.personne_1_id) && rootOf(m.personne_2_id, new Set()) !== R) ||
+        (members.has(m.personne_2_id) && rootOf(m.personne_1_id, new Set()) !== R)
+      );
+      if (bridges.length !== 1) return; // règle limitée au cas "satellite" simple (un seul pont)
+
+      const bridge = bridges[0];
+      const ownSide = members.has(bridge.personne_1_id) ? bridge.personne_1_id : bridge.personne_2_id;
+      const otherSide = ownSide === bridge.personne_1_id ? bridge.personne_2_id : bridge.personne_1_id;
+      const otherRoot = rootOf(otherSide, new Set());
+      const otherMembers = subtreeOf[otherRoot] || [];
+      if (memberIds.length >= otherMembers.length) return; // on ne déplace que la lignée la plus petite
+
+      const ownPos = positions[ownSide];
+      const otherPos = positions[otherSide];
+      if (!ownPos || !otherPos) return;
+
+      const targetY = ownPos.y; // la génération (Y) ne change jamais, seuls X/Z bougent
+      const desiredDist = SPOUSE_RADIUS + 1.5;
+      const currentDist = Math.hypot(ownPos.x - otherPos.x, ownPos.z - otherPos.z);
+      if (currentDist <= desiredDist + 2) return; // déjà assez proche, rien à gagner
+
+      const candidateAngles = Array.from({ length: 12 }, (_, i) => i * Math.PI / 6);
+      let best = null, bestClearance = -Infinity;
+      candidateAngles.forEach(a => {
+        const px = otherPos.x + desiredDist * Math.cos(a);
+        const pz = otherPos.z + desiredDist * Math.sin(a);
+        let minD = Infinity;
+        Object.entries(positions).forEach(([pid, pos]) => {
+          if (members.has(pid)) return;
+          if (Math.abs(pos.y - targetY) > 0.01) return;
+          const d = Math.hypot(px - pos.x, pz - pos.z);
+          if (d < minD) minD = d;
+        });
+        if (minD > bestClearance) { bestClearance = minD; best = { x: px, z: pz }; }
+      });
+      if (!best || bestClearance < 1.2) return; // pas de place suffisante trouvée : on laisse en place
+
+      const dx = best.x - ownPos.x;
+      const dz = best.z - ownPos.z;
+
+      const visited = new Set();
+      members.forEach(pid => {
+        if (!positions[pid]) return;
+        positions[pid].x += dx;
+        positions[pid].z += dz;
+        visited.add(pid);
+      });
+
+      (childrenByParent[ownSide] || []).forEach(childId => {
+        cascadeShift(childId, dx / 2, dz / 2, visited);
+      });
+    });
+  }
+  optimizeSatelliteBranches();
+
+  const unknownNodes = []; // {key, x,y,z}
+  filiations.forEach(f => {
+    if (f.pere_id && byId[f.pere_id] && !f.mere_id && positions[f.pere_id]) {
+      const pp = positions[f.pere_id];
+      unknownNodes.push({ key: 'unk-mere-' + f.enfant_id, x: pp.x + 0.9, y: pp.y, z: pp.z });
+    }
+    if (f.mere_id && byId[f.mere_id] && !f.pere_id && positions[f.mere_id]) {
+      const mp = positions[f.mere_id];
+      unknownNodes.push({ key: 'unk-pere-' + f.enfant_id, x: mp.x - 0.9, y: mp.y, z: mp.z });
+    }
+  });
+
+  const boxGeo = new THREE.BoxGeometry(1.6, 0.7, 0.35);
+  const unknownBoxGeo = new THREE.BoxGeometry(0.7, 0.7, 0.35);
+
+  personnes.forEach(p => {
+    const pos = positions[p.id];
+    if (!pos) return;
+    const color = SEXE_COLOR[p.sexe] ?? SEXE_COLOR_DEFAULT;
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
+    const mesh = new THREE.Mesh(boxGeo, mat);
+    mesh.position.set(pos.x, pos.y, pos.z);
+    contentGroup.add(mesh);
+
+    const sub = subFor(p);
+    addLabel('node-label ' + sexeClass(p),
+      escapeHtml(nomComplet(p)) + (sub ? `<span class="sub">${escapeHtml(sub)}</span>` : ''),
+      escapeHtml(initiales(p)),
+      mesh, p.id, nomComplet(p));
+  });
+
+  unknownNodes.forEach(u => {
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 });
+    const mesh = new THREE.Mesh(unknownBoxGeo, mat);
+    mesh.position.set(u.x, u.y, u.z);
+    contentGroup.add(mesh);
+    addLabel('node-label unknown', '?', '?', mesh);
+  });
+  const unknownById = {};
+  unknownNodes.forEach(u => { unknownById[u.key] = u; });
+
+  function lineBetween(a, b, color, dashed, ids, opacity) {
+    const geo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(a.x, a.y, a.z),
+      new THREE.Vector3(b.x, b.y, b.z),
+    ]);
+    const defaultOpacity = opacity ?? 0.85;
+    let line;
+    if (dashed) {
+      const mat = new THREE.LineDashedMaterial({ color, dashSize: 0.25, gapSize: 0.15, transparent: true, opacity: defaultOpacity });
+      line = new THREE.Line(geo, mat);
+      line.computeLineDistances(); // requis, sinon LineDashedMaterial affiche un trait plein
+    } else {
+      const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: defaultOpacity });
+      line = new THREE.Line(geo, mat);
+    }
+    contentGroup.add(line);
+    if (ids && ids.size) lineRegistry.push({ mesh: line, defaultOpacity, baseOpacity: defaultOpacity, ids });
+    return line;
+  }
+
+  const drawnMarriages = new Set();
+  mariages.forEach(m => {
+    const key = [m.personne_1_id, m.personne_2_id].sort().join('|') + '|' + m.ordre;
+    if (drawnMarriages.has(key)) return;
+    drawnMarriages.add(key);
+    const p1 = positions[m.personne_1_id], p2 = positions[m.personne_2_id];
+    if (!p1 || !p2) return;
+    lineBetween(p1, p2, 0x7A2E2E, false, new Set([m.personne_1_id, m.personne_2_id]));
+    const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 + 0.45, z: (p1.z + p2.z) / 2 };
+    const label = m.ordre ? (m.ordre === 1 ? '1er mariage' : m.ordre + 'e mariage') : '';
+    if (label) addMarriageLabel(label, mid);
+  });
+
+  const groups = {};
+  filiations.forEach(f => {
+    if (!positions[f.enfant_id]) return;
+    const key = (f.pere_id || 'unk') + '|' + (f.mere_id || 'unk');
+    (groups[key] = groups[key] || []).push(f);
+  });
+
+  Object.entries(groups).forEach(([key, fils]) => {
+    const [pereId, mereId] = key.split('|');
+    const perePos = pereId !== 'unk' ? positions[pereId] : null;
+    const merePos = mereId !== 'unk' ? positions[mereId] : null;
+    let union;
+
+    if (perePos && merePos) {
+      union = { x: (perePos.x + merePos.x) / 2, y: perePos.y, z: (perePos.z + merePos.z) / 2 };
+    } else if (perePos) {
+      const unk = unknownById['unk-mere-' + fils[0].enfant_id];
+      union = unk ? { x: (perePos.x + unk.x) / 2, y: perePos.y, z: (perePos.z + unk.z) / 2 } : perePos;
+    } else if (merePos) {
+      const unk = unknownById['unk-pere-' + fils[0].enfant_id];
+      union = unk ? { x: (unk.x + merePos.x) / 2, y: merePos.y, z: (unk.z + merePos.z) / 2 } : merePos;
+    } else {
+      return;
+    }
+
+    const branchColor = colorForGroup(key);
+    const famIds = new Set([pereId, mereId, ...fils.map(f => f.enfant_id)].filter(id => id && id !== 'unk'));
+    fils.forEach(f => {
+      const cp = positions[f.enfant_id];
+      if (!cp) return;
+      const incertain = !!(f.pere_incertain || f.mere_incertaine);
+      lineBetween(union, cp, branchColor, incertain, famIds);
+    });
+  });
+
+  lastPositions = positions;
+  resize();
+}
+
+const tmpVec = new THREE.Vector3();
+function updateLabels() {
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  labelEls.forEach(({ el, obj3d }) => {
+    tmpVec.copy(obj3d.position).project(camera);
+    const behind = tmpVec.z > 1;
+    if (behind) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.style.left = ((tmpVec.x * 0.5 + 0.5) * w) + 'px';
+    el.style.top = ((-tmpVec.y * 0.5 + 0.5) * h) + 'px';
+  });
+  marriageLabelEls.forEach(({ el, position }) => {
+    tmpVec.set(position.x, position.y, position.z).project(camera);
+    const behind = tmpVec.z > 1;
+    if (behind) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.style.left = ((tmpVec.x * 0.5 + 0.5) * w) + 'px';
+    el.style.top = ((-tmpVec.y * 0.5 + 0.5) * h) + 'px';
+  });
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+  updateLabels();
+}
+
+function openConfig(prefill) {
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  }
+  document.getElementById('config-overlay').classList.remove('hidden');
+  const actif = arbreActif();
+  if (prefill && actif) {
+    document.getElementById('cfg-url').value = actif.url;
+    document.getElementById('cfg-key').value = actif.key;
+  } else {
+    let brouillon = null;
+    try { brouillon = JSON.parse(localStorage.getItem(LS_DRAFT_KEY)); } catch (e) {}
+    document.getElementById('cfg-url').value = (brouillon && brouillon.url) || '';
+    document.getElementById('cfg-key').value = (brouillon && brouillon.key) || '';
+  }
+  document.getElementById('config-status').textContent = '';
+}
+function saveConfigDraft() {
+  localStorage.setItem(LS_DRAFT_KEY, JSON.stringify({
+    url: document.getElementById('cfg-url').value,
+    key: document.getElementById('cfg-key').value
+  }));
+}
+function closeConfig() {
+  document.getElementById('config-overlay').classList.add('hidden');
+}
+function openAide() {
+  document.getElementById('aide-overlay').classList.remove('hidden');
+}
+function closeAide() {
+  document.getElementById('aide-overlay').classList.add('hidden');
+}
+function copySqlScript() {
+  const text = document.getElementById('sql-script').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const el = document.getElementById('aide-copy-status');
+    el.textContent = 'Script copié dans le presse-papiers !';
+    el.className = 'status ok';
+    setTimeout(() => { el.textContent = ''; }, 3000);
+  }).catch(() => {
+    const el = document.getElementById('aide-copy-status');
+    el.textContent = 'Copie impossible — sélectionnez le texte manuellement.';
+    el.className = 'status error';
+  });
+}
+
+// ============================================================
+// Gestion de plusieurs arbres (liste memorisee dans ce navigateur,
+// partagee avec l'application d'encodage et la vue 2D)
+// ============================================================
+function getArbres() {
+  try { return JSON.parse(localStorage.getItem(LS_ARBRES_KEY)) || []; }
+  catch (e) { return []; }
+}
+function saveArbres(liste) {
+  localStorage.setItem(LS_ARBRES_KEY, JSON.stringify(liste));
+}
+function migrerAncienneConnexionSiBesoin() {
+  const arbres = getArbres();
+  const ancienUrl = localStorage.getItem(LS_URL_KEY);
+  const ancienneKey = localStorage.getItem(LS_ANON_KEY);
+  if (ancienUrl && ancienneKey && !arbres.some(a => a.url === ancienUrl)) {
+    const id = 'arbre-' + Date.now();
+    arbres.push({ id, nom: 'Mon arbre', url: ancienUrl, key: ancienneKey });
+    saveArbres(arbres);
+    localStorage.setItem(LS_ACTIF_KEY, id);
+  }
+}
+function upsertArbre(url, key, nomSouhaite) {
+  const arbres = getArbres();
+  let entry = arbres.find(a => a.url === url);
+  if (entry) {
+    entry.key = key;
+    if (nomSouhaite) entry.nom = nomSouhaite;
+  } else {
+    entry = { id: 'arbre-' + Date.now(), nom: nomSouhaite || 'Arbre sans nom', url, key };
+    arbres.push(entry);
+  }
+  saveArbres(arbres);
+  localStorage.setItem(LS_ACTIF_KEY, entry.id);
+  return entry;
+}
+function arbreActif() {
+  const id = localStorage.getItem(LS_ACTIF_KEY);
+  return getArbres().find(a => a.id === id) || null;
+}
+async function selectionnerArbre(id) {
+  const entry = getArbres().find(a => a.id === id);
+  if (!entry) return;
+  sb = createClient(entry.url, entry.key);
+  localStorage.setItem(LS_ACTIF_KEY, id);
+  closeArbres();
+  await loadAndRender();
+}
+function renommerArbre(id) {
+  const arbres = getArbres();
+  const entry = arbres.find(a => a.id === id);
+  if (!entry) return;
+  const nouveauNom = prompt('Nouveau nom pour cet arbre :', entry.nom);
+  if (!nouveauNom || !nouveauNom.trim()) return;
+  entry.nom = nouveauNom.trim();
+  saveArbres(arbres);
+  renderArbresList();
+}
+function supprimerArbreMemorise(id) {
+  const arbres = getArbres();
+  const entry = arbres.find(a => a.id === id);
+  if (!entry) return;
+  if (!confirm('Retirer "' + entry.nom + '" de la liste mémorisée ? (Vos données restent intactes sur Supabase — ceci n\'efface que le raccourci dans ce navigateur.)')) return;
+  const nouvelleListe = arbres.filter(a => a.id !== id);
+  saveArbres(nouvelleListe);
+  if (localStorage.getItem(LS_ACTIF_KEY) === id) {
+    localStorage.removeItem(LS_ACTIF_KEY);
+  }
+  renderArbresList();
+}
+function openArbres() {
+  renderArbresList();
+  document.getElementById('arbres-overlay').classList.remove('hidden');
+}
+function closeArbres() {
+  document.getElementById('arbres-overlay').classList.add('hidden');
+}
+function renderArbresList() {
+  const arbres = getArbres();
+  const activeId = localStorage.getItem(LS_ACTIF_KEY);
+  const container = document.getElementById('arbres-list');
+  if (!arbres.length) {
+    container.innerHTML = '<p class="hint-text">Aucun arbre mémorisé pour l\'instant. Connectez-vous à un projet Supabase (« ⚙ Changer de connexion ») pour qu\'il apparaisse ici.</p>';
+    return;
+  }
+  container.innerHTML = arbres.map(a => `
+    <div class="arbre-item${a.id === activeId ? ' actif' : ''}">
+      <div class="arbre-info">
+        <strong>${a.nom}</strong>${a.id === activeId ? ' <span class="tag-actif">actif</span>' : ''}
+        <div class="arbre-url">${a.url}</div>
+      </div>
+      <div class="arbre-actions">
+        ${a.id === activeId ? '' : '<button class="btn small" onclick="selectionnerArbre(\'' + a.id + '\')">Utiliser</button>'}
+        <button class="btn small" onclick="renommerArbre('${a.id}')">Renommer</button>
+        <button class="btn small" onclick="supprimerArbreMemorise('${a.id}')">Retirer</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function saveConfig() {
+  let url = document.getElementById('cfg-url').value.trim();
+  url = url.replace(/\/rest\/v1\/?$/i, '').replace(/\/+$/, '');
+  document.getElementById('cfg-url').value = url;
+  const key = document.getElementById('cfg-key').value.trim();
+  const statusEl = document.getElementById('config-status');
+  if (!url || !key) {
+    statusEl.textContent = 'Merci de remplir les deux champs.';
+    statusEl.className = 'status error';
+    return;
+  }
+  statusEl.textContent = 'Vérification de la connexion...';
+  statusEl.className = 'status';
+  let testClient;
+  try {
+    testClient = createClient(url, key);
+  } catch (e) {
+    statusEl.textContent = 'URL invalide.';
+    statusEl.className = 'status error';
+    return;
+  }
+  const { error } = await testClient.from('personnes').select('id').limit(1);
+  if (error) {
+    statusEl.textContent = 'Connexion impossible : ' + error.message + ' (vérifiez l\'URL, la clé, et que les tables ont bien été créées — voir le mode d\'emploi).';
+    statusEl.className = 'status error';
+    return;
+  }
+  const dejaConnu = getArbres().some(a => a.url === url);
+  let nom = null;
+  if (!dejaConnu) {
+    nom = prompt('Comment voulez-vous nommer cet arbre ? (ex : « Famille Laurent »)', 'Mon arbre');
+    if (nom === null) return;
+  }
+  upsertArbre(url, key, nom);
+  localStorage.removeItem(LS_DRAFT_KEY);
+  sb = testClient;
+  statusEl.textContent = 'Connecté !';
+  statusEl.className = 'status ok';
+  setTimeout(() => {
+    closeConfig();
+    loadAndRender();
+  }, 500);
+}
+function initConnection() {
+  migrerAncienneConnexionSiBesoin();
+  const actif = arbreActif();
+  if (actif) {
+    sb = createClient(actif.url, actif.key);
+    loadAndRender();
+  } else {
+    openConfig(false);
+  }
+}
+// ============================================================
+// Recherche d'une personne (filtre + centre la camera dessus)
+// ============================================================
+function filtrerRecherchePersonne() {
+  const terme = document.getElementById('personne-search').value.trim().toLowerCase();
+  const resultsEl = document.getElementById('personne-search-results');
+  if (!terme || !currentData.personnes.length) { resultsEl.style.display = 'none'; return; }
+
+  const matches = currentData.personnes
+    .filter(p => nomComplet(p).toLowerCase().includes(terme))
+    .slice(0, 8);
+
+  if (!matches.length) {
+    resultsEl.innerHTML = '<div style="padding:8px 10px; font-size:12px; color:var(--gris-texte); font-style:italic;">Aucun résultat</div>';
+    resultsEl.style.display = 'block';
+    return;
+  }
+
+  resultsEl.innerHTML = matches.map(p =>
+    '<div style="padding:8px 10px; font-size:13px; cursor:pointer; border-bottom:1px solid #e8dcc4;" ' +
+    'onmouseover="this.style.background=\'var(--parchemin)\'" onmouseout="this.style.background=\'\'" ' +
+    'onclick="selectionnerPersonneRecherche(\'' + p.id + '\')">' + escapeHtml(nomComplet(p)) + '</div>'
+  ).join('');
+  resultsEl.style.display = 'block';
+}
+window.filtrerRecherchePersonne = filtrerRecherchePersonne;
+
+function selectionnerPersonneRecherche(id) {
+  document.getElementById('personne-search-results').style.display = 'none';
+  document.getElementById('personne-search').value = '';
+  focusOnPerson(id);
+}
+window.selectionnerPersonneRecherche = selectionnerPersonneRecherche;
+
+document.addEventListener('click', (e) => {
+  const box = document.getElementById('personne-search-results');
+  const input = document.getElementById('personne-search');
+  if (box && !box.contains(e.target) && e.target !== input) box.style.display = 'none';
+});
+
+function openExportPanel() {
+  if (!currentData.personnes.length) {
+    alert("Aucune donnée chargée pour l'instant.");
+    return;
+  }
+  const select = document.getElementById('export-person-select');
+  const sorted = [...currentData.personnes].sort((a, b) => nomComplet(a).localeCompare(nomComplet(b), 'fr'));
+  select.innerHTML = sorted.map(p => '<option value="' + p.id + '">' + escapeHtml(nomComplet(p)) + '</option>').join('');
+  document.getElementById('export-status').textContent = '';
+  document.getElementById('export-overlay').classList.remove('hidden');
+}
+function closeExportPanel() {
+  document.getElementById('export-overlay').classList.add('hidden');
+}
+
+function generateFrozenView() {
+  const personId = document.getElementById('export-person-select').value;
+  const person = currentData.personnes.find(p => p.id === personId);
+  if (!person) {
+    document.getElementById('export-status').textContent = 'Sélectionnez une personne.';
+    document.getElementById('export-status').className = 'status error';
+    return;
+  }
+
+  const dataJson = JSON.stringify({
+    personnes: currentData.personnes,
+    mariages: currentData.mariages,
+    filiations: currentData.filiations
+  });
+
+  const docClone = document.documentElement.cloneNode(true);
+
+  // IMPORTANT : on retire le contenu déjà affiché des étiquettes avant de
+  // cloner — sinon elles se retrouvent figées à leur position d'export en
+  // plus du nouveau rendu vivant que le script recrée au chargement,
+  // provoquant des doublons immobiles à l'écran.
+  const clonedLabelLayer = docClone.querySelector('#label-layer');
+  if (clonedLabelLayer) clonedLabelLayer.innerHTML = '';
+
+  ['config-overlay', 'aide-overlay', 'export-overlay'].forEach(id => {
+    const el = docClone.querySelector('#' + id);
+    if (el) el.remove();
+  });
+
+  const header = docClone.querySelector('header');
+  if (header) {
+    header.querySelectorAll('button').forEach(btn => {
+      const txt = btn.textContent.trim();
+      if (txt.includes('Changer de connexion') || txt.includes('vue figée')) btn.remove();
+    });
+    const h1 = header.querySelector('h1');
+    if (h1) h1.textContent = '🌿 ' + nomComplet(person);
+    const p = header.querySelector('p');
+    if (p) p.textContent = 'Vue figée · générée le ' + new Date().toLocaleDateString('fr-FR');
+  }
+
+  const dataScript = docClone.ownerDocument.createElement('script');
+  dataScript.textContent = 'window.EMBEDDED_DATA = ' + dataJson + ';\nwindow.EMBEDDED_FOCUS_ID = ' + JSON.stringify(personId) + ';';
+  const moduleScript = docClone.querySelector('script[type="module"]');
+  moduleScript.parentNode.insertBefore(dataScript, moduleScript);
+
+  const finalHtml = '<!DOCTYPE html>\n<!--\n  © Origines — Tous droits réservés.\n  Vue figée générée depuis l\'application Origines — non modifiable.\n-->\n' + docClone.outerHTML;
+  const blob = new Blob([finalHtml], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const slug = nomComplet(person).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase();
+  a.download = 'arbre-' + slug + '-fige-' + new Date().toISOString().slice(0, 10) + '.html';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  closeExportPanel();
+}
+
+window.openConfig = openConfig;
+window.closeConfig = closeConfig;
+window.saveConfigDraft = saveConfigDraft;
+window.openAide = openAide;
+window.closeAide = closeAide;
+window.copySqlScript = copySqlScript;
+window.saveConfig = saveConfig;
+window.openArbres = openArbres;
+window.closeArbres = closeArbres;
+window.selectionnerArbre = selectionnerArbre;
+window.renommerArbre = renommerArbre;
+window.supprimerArbreMemorise = supprimerArbreMemorise;
+window.openExportPanel = openExportPanel;
+window.closeExportPanel = closeExportPanel;
+window.generateFrozenView = generateFrozenView;
+
+window.loadAndRender = loadAndRender;
+resize();
+animate();
+initConnection();
+</script>
+
+</body>
+</html>

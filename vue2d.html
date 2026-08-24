@@ -1,0 +1,1956 @@
+<!-- vue2d-familychart-prototype.html — PROTOTYPE — Vue 2D basée sur la bibliothèque
+     family-chart (D3.js, MIT, github.com/donatso/family-chart) au lieu de l'algorithme
+     maison (largeurBloc/placerBloc/dessiner). Reprend telle quelle la connexion Supabase
+     de test et le filtre MODE_TEST_FAMILLE_UNIQUE de vue2d-v1.12.html ; seule la partie
+     "construction du graphe -> positionnement -> dessin" change. -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rois d'Égypte — Vue 2D</title>
+<script src="https://unpkg.com/d3@7"></script>
+<link rel="stylesheet" href="https://unpkg.com/family-chart@latest/dist/styles/family-chart.css">
+<script type="module" src="https://unpkg.com/family-chart@latest"></script>
+<style>
+  :root{
+    --bleu:#3a86c8;
+    --vert-clair:#a8e05f;
+    --fond:#f4f2ec;
+    --panneau:#ffffff;
+    --texte:#20261f;
+    --bordure:#d8d3c2;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; font-family:'Segoe UI', Arial, sans-serif; background:var(--fond); color:var(--texte); }
+
+  header.barre-app{
+    display:flex; align-items:center; gap:1rem; padding:0.6rem 1rem;
+    background:var(--panneau); border-bottom:1px solid var(--bordure); flex-wrap:wrap;
+  }
+  header.barre-app h1{ font-size:1.05rem; margin:0; white-space:nowrap; }
+  .badge-version{ font-size:0.7rem; color:#9a9484; font-family:monospace; }
+  .badge-test{
+    font-size:0.72rem; color:#fff; background:#c0392b; padding:0.25rem 0.55rem;
+    border-radius:4px; font-weight:600;
+  }
+  .info-utilisateur{ margin-left:auto; font-size:0.8rem; color:#5a5a52; }
+
+  .bascule-vue{ display:flex; gap:0.4rem; }
+  .bascule-vue button{
+    border:1px solid var(--bordure); background:#fff; color:var(--texte);
+    padding:0.4rem 0.8rem; border-radius:5px; font-size:0.85rem; cursor:pointer;
+  }
+  .bascule-vue button.actif{ background:var(--bleu); color:#fff; border-color:var(--bleu); }
+
+  #zoneCanevas{ height:calc(100vh - 54px); position:relative; overflow:auto; }
+  #FamilyChart{ width:100%; height:100%; background:var(--fond); }
+  #vueGraphique{ display:none; background:var(--fond); }
+  #vueGraphiqueNote{ display:none; padding:0.5rem 1rem; font-size:0.8rem; color:#9a6b1a; background:#fdf3e3; border-bottom:1px solid #f0dfb5; }
+  #vueGraphique .noeud-nom{ font-size:12px; font-weight:600; fill:var(--texte); }
+  #vueGraphique .noeud-nom.roi{ font-size:14px; }
+  #vueGraphique .noeud-nom.homme{ fill:var(--bleu); }
+  #vueGraphique .noeud-nom.femme{ fill:#c0587a; }
+  #vueGraphique .noeud-date{ font-size:10px; fill:#7a7668; }
+  #vueGraphique .noeud-boite{ fill:var(--panneau); stroke:var(--bordure); stroke-width:1; }
+  #vueGraphique .noeud-boite.orpheline{ fill:#fdecea; stroke:#c0392b; }
+  #vueGraphique .noeud-boite.roi{ fill:#f6e3ac; stroke:#b8860b; }
+  #vueGraphique .noeud-boite.grande-epouse{ fill:#a8d5ba; stroke:#4a8c67; }
+  #vueGraphique .noeud-boite.epouse-royale{ fill:#dcefe2; stroke:#7fb896; }
+  #vueGraphique .noeud-clic{ cursor:pointer; }
+  #vueGraphique .noeud-clic:hover .noeud-boite{ stroke:var(--bleu); stroke-width:2; }
+  #zoneCanevas.pan-actif{ cursor:grab; }
+  #zoneCanevas.pan-en-cours{ cursor:grabbing; }
+  #vueGraphique .lien-mariage{ stroke:#c0392b; stroke-width:4; }
+  #vueGraphique .lien-mariage-decale{ stroke-dasharray:4,3; }
+  #vueGraphique .lien-filiation{ stroke:#2e7d32; stroke-width:1.6; fill:none; }
+  #vueGraphique .lien-filiation.lien-pont-profond{ stroke:#b8860b; stroke-dasharray:5,3; }
+  #vueGraphique .lien-filiation.lien-incertain{ stroke:#a8432e; stroke-dasharray:5,3; }
+  #vueGraphique .etiquette-generation{ font-size:11px; fill:#9a9484; font-weight:600; }
+
+  #vueEnsemble{ display:none; padding:1.2rem 1.6rem; max-width:1100px; margin:0 auto; }
+  .generation-bloc{ margin-bottom:1.8rem; }
+  .generation-titre{
+    font-size:1rem; font-weight:700; color:#5a5a52; margin:0 0 0.6rem;
+    padding-bottom:0.3rem; border-bottom:1px solid var(--bordure);
+  }
+
+  /* Groupe de fratrie : bracket vert en haut (comme l'ancien rendu graphique),
+     mais construit uniquement avec le flux normal du document (flexbox), donc
+     jamais de trait qui "voyage" ailleurs sur l'écran. */
+  .fratrie-groupe{
+    display:flex; flex-wrap:wrap; align-items:flex-start; gap:1.3rem;
+    padding-top:0.9rem; margin-bottom:1.1rem; position:relative;
+  }
+  .fratrie-groupe.a-plusieurs-membres{ border-top:2px solid #2e7d32; }
+  .fratrie-membre{ position:relative; }
+  .fratrie-groupe.a-plusieurs-membres .fratrie-membre::before{
+    content:''; position:absolute; top:-0.9rem; left:50%; width:2px; height:0.9rem;
+    background:#2e7d32; transform:translateX(-50%);
+  }
+
+  /* Couple marié : 2 cartes reliées par un petit trait rouge, toujours l'une
+     à côté de l'autre (jamais éloignées, contrairement à l'ancien algorithme). */
+  .couple-pair{ display:flex; align-items:stretch; }
+  .couple-pair .personne-carte{ margin-bottom:0; }
+  .couple-connecteur{ width:16px; align-self:center; height:2px; background:#c0392b; flex-shrink:0; }
+
+  .personne-carte{
+    background:var(--panneau); border:1px solid var(--bordure); border-radius:6px;
+    padding:0.6rem 0.9rem; margin-bottom:0.5rem;
+  }
+  .personne-nom{ font-weight:600; }
+  .personne-nom.homme{ color:var(--bleu); }
+  .personne-nom.femme{ color:#c0587a; }
+  .personne-details{ font-size:0.85rem; color:#5a5a52; margin-top:0.2rem; }
+
+  .chargement, .vide{ padding:2.5rem; text-align:center; color:#7a7668; font-size:0.95rem; }
+
+  /* ===== Système "Mes arbres" (connexion multi-comptes) ===== */
+  .hidden { display:none !important; }
+  #config-overlay, #arbres-overlay, #aide-overlay {
+    position: fixed; inset: 0; background: rgba(32,38,31,0.85);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000; padding: 20px;
+  }
+  .config-box, .aide-box {
+    background: var(--panneau); border-radius: 10px; padding: 32px;
+    max-width: 460px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+    position: relative;
+  }
+  .aide-box { max-width: 620px; max-height: 85vh; overflow: auto; }
+  .config-box h2, .aide-box h2 { margin: 0 0 6px; }
+  .config-box p, .aide-box p { font-size: 14px; color: #5a5a52; margin: 0 0 18px; line-height: 1.5; }
+  .config-box label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 4px; }
+  .config-box input, .config-box select {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--bordure);
+    border-radius: 6px; font-family: inherit; font-size: 14px;
+  }
+  .config-actions { margin-top: 22px; display: flex; gap: 10px; }
+  .btn-cfg {
+    background: var(--bleu); color: #fff; border: none; padding: 9px 16px;
+    border-radius: 6px; cursor: pointer; font-size: 14px; font-family: inherit;
+  }
+  .btn-cfg.secondary { background: #fff; color: var(--texte); border: 1px solid var(--bordure); }
+  .btn-cfg.small { padding: 4px 10px; font-size: 12px; }
+  .status { margin-top: 12px; font-size: 13px; }
+  .status.error { color: #c0392b; }
+  .status.ok { color: #2e7d32; }
+  #config-gear, .link-btn {
+    background: none; border: none; color: var(--bleu); cursor: pointer;
+    font-size: 12px; text-decoration: underline; padding: 0;
+  }
+  .close-overlay-btn {
+    position: absolute; top: 14px; right: 14px; background: none; border: none;
+    font-size: 20px; line-height: 1; cursor: pointer; color: #7a7668;
+  }
+  .hint-text { font-size: 12px; color: rgba(74,68,56,0.7); }
+  .arbre-item {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--bordure);
+  }
+  .arbre-item:last-child { border-bottom: none; }
+  .arbre-item.actif { background: rgba(58,134,200,0.07); margin: 0 -14px; padding: 12px 14px; border-radius: 6px; }
+  .arbre-info strong { color: var(--texte); }
+  .arbre-url { font-size: 11px; color: #7a7668; word-break: break-all; margin-top: 2px; }
+  .arbre-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .tag-actif {
+    background: #2e7d32; color: #fff; font-size: 10px; text-transform: uppercase;
+    padding: 1px 7px; border-radius: 8px; font-weight: 700; letter-spacing: 0.3px;
+  }
+  .aide-steps { counter-reset: step; padding: 0; margin: 0 0 20px; list-style: none; }
+  .aide-steps li { counter-increment: step; position: relative; padding: 0 0 18px 40px; line-height: 1.5; }
+  .aide-steps li::before {
+    content: counter(step); position: absolute; left: 0; top: 0;
+    width: 26px; height: 26px; border-radius: 50%; background: var(--bleu);
+    color: #fff; font-weight: 600; font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .aide-steps a { color: #c0392b; }
+  .code-block-wrap { position: relative; margin: 10px 0 4px; }
+  .code-block {
+    background: #20261f; color: #e6ddc9; padding: 16px; border-radius: 8px;
+    font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.5;
+    max-height: 280px; overflow: auto; white-space: pre;
+  }
+  .copy-btn {
+    position: absolute; top: 10px; right: 10px; background: var(--bleu);
+    color: #fff; border: none; border-radius: 5px; padding: 6px 12px;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .aide-box .config-actions { margin-top: 18px; }
+  /* Impression : ne garder que la vue actuellement affichée, sans
+     l'en-tête ni les boutons ni les éventuelles fenêtres superposées.
+     Le format de page s'ajuste au contenu (utile pour un arbre large en
+     Vue graphique), quitte à ce que le navigateur redécoupe sur
+     plusieurs pages papier si besoin. */
+  @media print {
+    #config-overlay, #arbres-overlay, header.barre-app, #messageZone { display:none !important; }
+    body { background:#fff; }
+    #zoneCanevas { overflow:visible; height:auto; }
+  }
+</style>
+</head>
+<body>
+<div id="auth-gate" style="position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#1B2A3A,#3a2a1a);display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Arial,sans-serif;">
+  <div style="background:#FBF6EA;border-radius:10px;padding:36px 40px;max-width:380px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.4);text-align:center;">
+    <h2 style="margin:0 0 6px;font-family:Georgia,serif;color:#1B2A3A;">𓂀 Rois d'Égypte antique</h2>
+    <p style="margin:0 0 20px;font-size:13px;color:#8B5E3C;">Accès réservé — connexion par code</p>
+    <div id="auth-step-email">
+      <input id="auth-email" type="email" placeholder="votre@email.com" style="width:100%;padding:10px;margin-bottom:12px;border:1px solid #d8cbb0;border-radius:5px;box-sizing:border-box;">
+      <button onclick="authEnvoyerCode()" style="width:100%;padding:10px;background:#1B2A3A;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:600;">Recevoir le code</button>
+    </div>
+    <div id="auth-step-code" style="display:none;">
+      <p style="font-size:12px;color:#4A3B2A;margin-bottom:10px;">Code envoyé à <strong id="auth-email-affiche"></strong></p>
+      <input id="auth-code" type="text" inputmode="numeric" maxlength="6" placeholder="123456" style="width:100%;padding:10px;margin-bottom:12px;border:1px solid #d8cbb0;border-radius:5px;box-sizing:border-box;text-align:center;font-size:20px;letter-spacing:4px;">
+      <button onclick="authValiderCode()" style="width:100%;padding:10px;background:#1B2A3A;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:600;">Valider</button>
+      <button onclick="authRetour()" style="width:100%;padding:8px;background:none;border:none;color:#8B5E3C;cursor:pointer;font-size:12px;margin-top:6px;">← Changer d'adresse</button>
+    </div>
+    <p id="auth-message" style="margin-top:14px;font-size:12px;color:#a8432e;min-height:16px;"></p>
+  </div>
+</div>
+<button id="auth-logout" onclick="authDeconnexion()" style="display:none;position:fixed;bottom:14px;right:14px;z-index:9998;padding:8px 14px;background:#fff;border:1px solid #d8cbb0;border-radius:6px;font-size:12px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.15);">🔓 Se déconnecter</button>
+
+<script>
+  var AUTH_SB = supabase.createClient(
+    'https://bhrpzizmzzmobhqvbfal.supabase.co',
+    'sb_publishable_6KGYHMGBq1p1lXE9JZwgeA_MeFBTSqm'
+  );
+
+  function authAfficherMessage(txt){ document.getElementById('auth-message').textContent = txt || ''; }
+
+  async function authEnvoyerCode(){
+    const email = document.getElementById('auth-email').value.trim();
+    if(!email){ authAfficherMessage('Entrez votre email.'); return; }
+    authAfficherMessage('Envoi en cours...');
+    const { error } = await AUTH_SB.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+    if(error){ authAfficherMessage('Erreur : ' + error.message); return; }
+    document.getElementById('auth-email-affiche').textContent = email;
+    document.getElementById('auth-step-email').style.display = 'none';
+    document.getElementById('auth-step-code').style.display = 'block';
+    authAfficherMessage('');
+  }
+
+  async function authValiderCode(){
+    const email = document.getElementById('auth-email').value.trim();
+    const token = document.getElementById('auth-code').value.trim();
+    if(!token){ authAfficherMessage('Entrez le code reçu.'); return; }
+    authAfficherMessage('Vérification...');
+    const { error } = await AUTH_SB.auth.verifyOtp({ email, token, type: 'email' });
+    if(error){ authAfficherMessage('Code invalide ou expiré.'); return; }
+    authMasquerGate();
+  }
+
+  function authRetour(){
+    document.getElementById('auth-step-code').style.display = 'none';
+    document.getElementById('auth-step-email').style.display = 'block';
+    authAfficherMessage('');
+  }
+
+  function authMasquerGate(){
+    document.getElementById('auth-gate').style.display = 'none';
+    document.getElementById('auth-logout').style.display = 'block';
+  }
+
+  async function authDeconnexion(){
+    await AUTH_SB.auth.signOut();
+    location.reload();
+  }
+
+  (async function authVerifierSession(){
+    const { data } = await AUTH_SB.auth.getSession();
+    if(data && data.session){
+      authMasquerGate();
+    }
+  })();
+</script>
+
+
+<div id="config-overlay" class="hidden">
+  <div class="config-box">
+    <button class="close-overlay-btn" onclick="closeConfig()" aria-label="Fermer">×</button>
+    <h2>🌿 Connexion à votre base</h2>
+    <p>Cette application affiche vos données à partir de votre propre projet Supabase (gratuit). Entrez ici l'URL et la clé « publishable » de votre projet. Besoin de les créer d'abord ? Voir le mode d'emploi.</p>
+    <label for="cfg-url">URL du projet Supabase</label>
+    <input type="text" id="cfg-url" placeholder="https://xxxxxxxx.supabase.co" oninput="saveConfigDraft()">
+    <label for="cfg-key">Clé publishable (anon)</label>
+    <input type="text" id="cfg-key" placeholder="sb_publishable_..." oninput="saveConfigDraft()">
+    <div class="config-actions">
+      <button class="btn-cfg" onclick="saveConfig()">Se connecter</button>
+      <button class="btn-cfg secondary" onclick="openAide()">Mode d'emploi</button>
+    </div>
+    <div class="status" id="config-status"></div>
+  </div>
+</div>
+
+<div id="arbres-overlay" class="hidden">
+  <div class="config-box" style="max-width:520px;">
+    <button class="close-overlay-btn" onclick="closeArbres()" aria-label="Fermer">×</button>
+    <h2>🌳 Mes arbres</h2>
+    <p>Les arbres auxquels vous vous êtes déjà connecté·e sur <strong>ce navigateur</strong>. Cliquez sur « Utiliser » pour basculer instantanément de l'un à l'autre.</p>
+    <div id="arbres-list"></div>
+    <p class="hint-text" style="margin-top:16px;">Cette liste est partagée avec l'application d'encodage et la vue 3D.</p>
+  </div>
+</div>
+
+<div id="aide-overlay" class="hidden">
+  <div class="aide-box">
+    <h2>Créer votre propre base de généalogie</h2>
+    <p>Cette application ne stocke rien elle-même : vos données vivent dans votre propre projet Supabase (gratuit), séparé et privé. Suivez ces étapes une seule fois.</p>
+    <ol class="aide-steps">
+      <li>Créez un compte gratuit sur <a href="https://supabase.com" target="_blank" rel="noopener">supabase.com</a> (bouton « Start your project »), puis créez un nouveau projet.</li>
+      <li>Ouvrez le menu <strong>SQL Editor</strong> dans la barre latérale gauche, puis <strong>New query</strong>.</li>
+      <li>Copiez le script ci-dessous, collez-le dans l'éditeur, puis cliquez sur <strong>Run</strong>. Les 3 tables nécessaires sont créées d'un coup.</li>
+      <li>Allez dans <strong>Project Settings ⚙ → API Keys</strong>. Notez l'<strong>URL du projet</strong> et la <strong>clé « publishable »</strong>.</li>
+      <li>Revenez sur cette page et collez ces deux valeurs dans l'écran de connexion.</li>
+    </ol>
+    <div class="code-block-wrap">
+      <button class="copy-btn" onclick="copySqlScript()">Copier</button>
+      <pre class="code-block" id="sql-script">-- ============================================================
+-- Script de création des tables — Généalogie familiale
+-- ============================================================
+-- MODE D'EMPLOI :
+-- 1. Ouvrez votre projet sur https://supabase.com
+-- 2. Dans le menu de gauche, cliquez sur "SQL Editor"
+-- 3. Cliquez sur "New query"
+-- 4. Collez tout ce fichier, puis cliquez sur "Run"
+-- Les 3 tables sont créées en une seule fois.
+-- ============================================================
+
+create extension if not exists "pgcrypto";
+
+-- Table des personnes -------------------------------------------------
+create table if not exists personnes (
+  id uuid primary key default gen_random_uuid(),
+  nom text not null,
+  prenom text,
+  autres_prenoms text,
+  sexe text,
+  date_naissance text,
+  date_deces text,
+  ville_naissance text,
+  pays_naissance text,
+  commentaire_1 text,
+  commentaire_2 text,
+  commentaire_3 text,
+  created_at timestamptz default now()
+);
+
+-- Table des mariages ----------------------------------------------------
+create table if not exists mariages (
+  id uuid primary key default gen_random_uuid(),
+  personne_1_id uuid not null references personnes(id) on delete cascade,
+  personne_2_id uuid not null references personnes(id) on delete cascade,
+  ordre integer,
+  date_debut text,
+  date_fin text,
+  commentaire text,
+  created_at timestamptz default now()
+);
+
+-- Table des filiations ----------------------------------------------------
+-- (un enfant n'a qu'une seule ligne de filiation, d'où "unique")
+create table if not exists filiations (
+  id uuid primary key default gen_random_uuid(),
+  enfant_id uuid not null unique references personnes(id) on delete cascade,
+  pere_id uuid references personnes(id) on delete set null,
+  mere_id uuid references personnes(id) on delete set null,
+  pere_incertain boolean default false,
+  mere_incertaine boolean default false,
+  created_at timestamptz default now()
+);
+
+-- ============================================================
+-- Sécurité (RLS)
+-- ============================================================
+-- Supabase active la sécurité au niveau des lignes par défaut, ce qui
+-- bloque tout accès tant qu'aucune règle n'est définie. Ces règles
+-- autorisent l'app (via la clé "publishable") à lire/écrire librement —
+-- adapté à un usage personnel où chaque utilisateur a son propre projet.
+
+alter table personnes enable row level security;
+alter table mariages enable row level security;
+alter table filiations enable row level security;
+
+create policy "Accès complet personnes" on personnes
+  for all using (true) with check (true);
+
+create policy "Accès complet mariages" on mariages
+  for all using (true) with check (true);
+
+create policy "Accès complet filiations" on filiations
+  for all using (true) with check (true);</pre>
+    </div>
+    <div class="status" id="aide-copy-status"></div>
+    <div class="config-actions">
+      <button class="btn-cfg" onclick="closeAide()">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<header class="barre-app">
+  <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
+  <span class="badge-version">v2.11</span>
+  <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
+  <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
+  <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
+  <button id="btnImprimer" class="link-btn" onclick="imprimerVueActive()">🖨️ Imprimer</button>
+  <div class="bascule-vue">
+    <button id="btnVueInteractive">Vue interactive</button>
+    <button id="btnVueGraphique" class="actif">Vue graphique</button>
+    <button id="btnVueEnsemble">Vue d'ensemble</button>
+  </div>
+</header>
+
+<div id="zoneCanevas">
+  <div id="messageZone" class="chargement">Chargement de l'arbre…</div>
+  <div id="FamilyChart" class="f3" style="display:none;"></div>
+  <div id="vueGraphiqueNote"></div>
+  <svg id="vueGraphique" xmlns="http://www.w3.org/2000/svg"></svg>
+  <div id="vueEnsemble"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script type="module">
+/* =========================================================================
+   CONFIGURATION — noms de tables/colonnes (identiques pour toutes les bases)
+   ========================================================================= */
+const CONFIG = {
+  table_personnes: 'personnes',
+  table_mariages: 'mariages',
+  table_filiations: 'filiations',
+  colonneCorbeille: null,
+};
+
+const LS_URL_KEY = 'genealogie_supabase_url';
+const LS_ANON_KEY = 'genealogie_supabase_key';
+const LS_ARBRES_KEY = 'genealogie_arbres';
+const LS_ACTIF_KEY = 'genealogie_arbre_actif';
+const LS_DRAFT_KEY = 'genealogie_connexion_brouillon';
+let client = null;
+
+// Mettre a true pour revenir au mode test limite a 2 familles (debogage).
+const MODE_TEST_FAMILLE_UNIQUE = false;
+
+let PERSONNES = new Map();
+let MARIAGES = [];
+let FILIATIONS = [];
+
+// Relations calculées une seule fois, réutilisées par les 2 vues.
+let spouseOf = new Map();
+let parentsOf = new Map();
+let childrenOf = new Map();
+
+/* =========================================================================
+   CHARGEMENT DES DONNÉES (identique à vue2d-v1.12.html)
+   ========================================================================= */
+async function chargerDonnees(){
+  const zoneMsg = document.getElementById('messageZone');
+  zoneMsg.textContent = 'Chargement de l\'arbre…';
+  zoneMsg.className = 'chargement';
+  zoneMsg.style.display = 'block';
+  document.getElementById('FamilyChart').style.display = 'none';
+
+  try{
+    let qPersonnes = client.from(CONFIG.table_personnes).select('*');
+    let qMariages = client.from(CONFIG.table_mariages).select('*');
+    let qFiliations = client.from(CONFIG.table_filiations).select('*');
+    if(CONFIG.colonneCorbeille){
+      qPersonnes = qPersonnes.is(CONFIG.colonneCorbeille, null);
+      qMariages = qMariages.is(CONFIG.colonneCorbeille, null);
+      qFiliations = qFiliations.is(CONFIG.colonneCorbeille, null);
+    }
+    const [rPersonnes, rMariages, rFiliations] = await Promise.all([qPersonnes, qMariages, qFiliations]);
+    if(rPersonnes.error) throw rPersonnes.error;
+    if(rMariages.error) throw rMariages.error;
+    if(rFiliations.error) throw rFiliations.error;
+
+    PERSONNES = new Map((rPersonnes.data || []).map(p => [p.id, p]));
+    MARIAGES = (rMariages.data || []).map(m => ({ id:m.id, p1:m.personne_1_id, p2:m.personne_2_id, ordre:m.ordre }));
+    FILIATIONS = (rFiliations.data || []).map(f => ({ id:f.id, enfant:f.enfant_id, pere:f.pere_id, mere:f.mere_id, pereIncertain: !!f.pere_incertain, mereIncertaine: !!f.mere_incertaine }));
+
+    // ============================================================
+    // MODE TEST — filtre identique a vue2d-v1.12.html (co-parent avere
+    // uniquement, jamais explore plus loin) : voir /areas/arbre-familial.md
+    // pour l'historique de ce filtre.
+    // ============================================================
+    if (MODE_TEST_FAMILLE_UNIQUE) {
+      const ancres = [
+        '248acdea-a072-4a99-a973-1ede42a4e877', // Joseph Laurent
+        '1abf14b9-0de7-458f-b4cb-14ddd59fac7e', // Jules Fourny (2e famille, pour tester le pont)
+      ];
+      const idsAutorises = new Set(ancres);
+      const file = [...ancres];
+      while (file.length) {
+        const courant = file.shift();
+        FILIATIONS.forEach(f => {
+          if (f.pere !== courant && f.mere !== courant) return;
+          if (!idsAutorises.has(f.enfant)) { idsAutorises.add(f.enfant); file.push(f.enfant); }
+          const coParent = f.pere === courant ? f.mere : f.pere;
+          if (coParent && !idsAutorises.has(coParent)) idsAutorises.add(coParent);
+        });
+      }
+      for (const id of Array.from(PERSONNES.keys())) {
+        if (!idsAutorises.has(id)) PERSONNES.delete(id);
+      }
+      MARIAGES = MARIAGES.filter(m => idsAutorises.has(m.p1) && idsAutorises.has(m.p2));
+      FILIATIONS = FILIATIONS.filter(f => idsAutorises.has(f.enfant));
+    }
+
+    if(PERSONNES.size === 0){
+      zoneMsg.textContent = 'Aucune personne enregistrée pour le moment.';
+      zoneMsg.className = 'vide';
+      return;
+    }
+
+    const donneesF3 = construireDonneesFamilyChart();
+
+    // ---- DIAGNOSTIC TEMPORAIRE ----
+    console.log('%c--- DIAGNOSTIC ARBRE COMPLET ---', 'color:green;font-weight:bold;font-size:14px;');
+    console.log('PERSONNES récupérées de Supabase :', PERSONNES.size);
+    console.log('MARIAGES récupérés :', MARIAGES.length);
+    console.log('FILIATIONS récupérées :', FILIATIONS.length);
+    console.log('Données transformées pour family-chart :', donneesF3.length, 'personnes');
+    // ---- FIN DIAGNOSTIC TEMPORAIRE ----
+
+    // IMPORTANT : rendre le conteneur visible AVANT de dessiner, sinon
+    // family-chart calcule sa mise en page sur un espace de largeur/hauteur
+    // nulle (display:none) et le rendu initial est cassé (corrigé, visible
+    // seulement apres un rafraichissement manuel du navigateur).
+    zoneMsg.style.display = 'none';
+    document.getElementById('FamilyChart').style.display = 'block';
+
+    afficherArbre(donneesF3);
+
+    // Les boutons sont attachés AVANT construireVueEnsemble() : si celle-ci
+    // plante sur un cas de données réel non prévu, les boutons restent
+    // fonctionnels (bascule sur la vue interactive au moins) au lieu
+    // d'être silencieusement inertes.
+    document.getElementById('btnVueInteractive').addEventListener('click', () => basculerVue('interactive'));
+    document.getElementById('btnVueEnsemble').addEventListener('click', () => basculerVue('ensemble'));
+
+    try{
+      construireVueEnsemble();
+    } catch(errEnsemble){
+      console.error('Erreur dans la Vue d\'ensemble :', errEnsemble);
+      document.getElementById('vueEnsemble').innerHTML =
+        '<p class="vide">Erreur dans la Vue d\'ensemble : ' + (errEnsemble.message || errEnsemble) + '<br>(voir la console F12 pour le détail complet)</p>';
+    }
+
+    document.getElementById('btnVueGraphique').addEventListener('click', () => basculerVue('graphique'));
+    try{
+      construireVueGraphique();
+    } catch(errGraphique){
+      console.error('Erreur dans la Vue graphique :', errGraphique);
+    }
+
+    // Vue graphique affichée par défaut à l'ouverture (les 2 autres vues
+    // ont quand même dû être construites avant, dans l'ordre ci-dessus —
+    // notamment FamilyChart, qui a besoin d'être visible un instant pour
+    // calculer sa mise en page correctement, cf. commentaire plus haut).
+    basculerVue('graphique');
+
+  } catch(err){
+    zoneMsg.textContent = 'Erreur de chargement : ' + (err.message || err);
+    zoneMsg.className = 'vide';
+    zoneMsg.style.display = 'block';
+    console.error(err);
+  }
+}
+
+function basculerVue(vue){
+  const btnInt = document.getElementById('btnVueInteractive');
+  const btnGra = document.getElementById('btnVueGraphique');
+  const btnEns = document.getElementById('btnVueEnsemble');
+  const divFC = document.getElementById('FamilyChart');
+  const divGR = document.getElementById('vueGraphique');
+  const divGRNote = document.getElementById('vueGraphiqueNote');
+  const divVE = document.getElementById('vueEnsemble');
+  [btnInt, btnGra, btnEns].forEach(b => b.classList.remove('actif'));
+  divFC.style.display = 'none'; divGR.style.display = 'none'; divGRNote.style.display = 'none'; divVE.style.display = 'none';
+  if(vue === 'interactive'){ btnInt.classList.add('actif'); divFC.style.display = 'block'; }
+  else if(vue === 'graphique'){
+    btnGra.classList.add('actif');
+    divGR.style.display = 'block';
+    if(divGRNote.textContent) divGRNote.style.display = 'block';
+  }
+  else { btnEns.classList.add('actif'); divVE.style.display = 'block'; }
+}
+
+function imprimerVueActive(){
+  // "size:auto" en CSS ne veut PAS dire "une page à la taille du
+  // contenu" — ça retombe sur le format papier par défaut (souvent A4),
+  // qui découpe alors un grand arbre sur plusieurs pages. On calcule ici
+  // la taille réelle du contenu affiché et on l'injecte comme taille de
+  // page, pour que tout l'arbre tienne sur une seule (grande) page,
+  // quelle que soit sa taille — indépendamment du zoom d'affichage, qui
+  // n'a de toute façon aucune influence sur l'impression.
+  const styleId = 'style-page-impression';
+  let styleTag = document.getElementById(styleId);
+  if(!styleTag){
+    styleTag = document.createElement('style');
+    styleTag.id = styleId;
+    document.head.appendChild(styleTag);
+  }
+
+  const vueActive = document.querySelector('.bascule-vue button.actif');
+  let largeurPx = 0, hauteurPx = 0;
+  if(vueActive && vueActive.id === 'btnVueGraphique'){
+    const svg = document.getElementById('vueGraphique');
+    largeurPx = parseFloat(svg.getAttribute('width')) || svg.getBoundingClientRect().width;
+    hauteurPx = parseFloat(svg.getAttribute('height')) || svg.getBoundingClientRect().height;
+  } else {
+    const conteneur = (vueActive && vueActive.id === 'btnVueInteractive')
+      ? document.getElementById('FamilyChart')
+      : document.getElementById('vueEnsemble');
+    largeurPx = conteneur.scrollWidth || conteneur.getBoundingClientRect().width;
+    hauteurPx = conteneur.scrollHeight || conteneur.getBoundingClientRect().height;
+  }
+
+  const MM_PAR_PX = 25.4 / 96; // conversion px CSS -> millimètres
+  const MARGE_MM = 10;
+  const largeurMm = Math.max(50, Math.ceil(largeurPx * MM_PAR_PX)) + MARGE_MM * 2;
+  const hauteurMm = Math.max(50, Math.ceil(hauteurPx * MM_PAR_PX)) + MARGE_MM * 2;
+
+  styleTag.textContent = `@media print { @page { size: ${largeurMm}mm ${hauteurMm}mm; margin: ${MARGE_MM}mm; } }`;
+
+  window.print();
+}
+
+/* =========================================================================
+   RELATIONS COMMUNES — calculées une fois, utilisées par les 2 vues
+   ========================================================================= */
+function construireRelations(){
+  spouseOf = new Map();
+  parentsOf = new Map();
+  childrenOf = new Map();
+
+  const ajouter = (map, cle, valeur) => {
+    if(!map.has(cle)) map.set(cle, []);
+    if(!map.get(cle).includes(valeur)) map.get(cle).push(valeur);
+  };
+
+  MARIAGES.forEach(m => {
+    if(!PERSONNES.has(m.p1) || !PERSONNES.has(m.p2)) return;
+    ajouter(spouseOf, m.p1, m.p2);
+    ajouter(spouseOf, m.p2, m.p1);
+  });
+
+  FILIATIONS.forEach(f => {
+    if(!PERSONNES.has(f.enfant)) return;
+    [f.pere, f.mere].forEach(pid => {
+      if(!pid || !PERSONNES.has(pid)) return;
+      ajouter(childrenOf, pid, f.enfant);
+      ajouter(parentsOf, f.enfant, pid);
+    });
+  });
+}
+
+/* =========================================================================
+   TRANSFORMATION vers le format attendu par family-chart :
+   [{ id, data: {...}, rels: {spouses:[], children:[], parents:[]} }, ...]
+   ========================================================================= */
+function construireDonneesFamilyChart(){
+  construireRelations();
+
+  return [...PERSONNES.values()].map(p => ({
+    id: p.id,
+    data: {
+      "first name": p.nom_usuel || '',
+      "last name": p.dynastie || '',
+      "birthday": [p.regne_debut, p.regne_fin].filter(Boolean).join(' – '),
+      "gender": p.sexe === 'Femme' ? 'F' : 'M',
+    },
+    rels: {
+      spouses: spouseOf.get(p.id) || [],
+      children: childrenOf.get(p.id) || [],
+      parents: parentsOf.get(p.id) || [],
+    }
+  }));
+}
+
+/* =========================================================================
+   AFFICHAGE — délégué entièrement à family-chart
+   ========================================================================= */
+let f3Chart = null;
+function afficherArbre(donnees){
+  f3Chart = f3.createChart('#FamilyChart', donnees);
+
+  f3Chart.setCardHtml()
+    .setCardDisplay([["first name","last name"],["birthday"]])
+    .setStyle('imageCircle')
+    .setMiniTree(true)
+    .setCardDim({});
+
+  f3Chart.updateTree({initial: true});
+}
+
+/* =========================================================================
+   VUE D'ENSEMBLE — liste groupée par génération (pas de diagramme : simple
+   et fiable même avec beaucoup de monde et des remariages/ponts entre
+   familles, contrairement à un rendu graphique).
+   ========================================================================= */
+function calculerGenerations(){
+  const GENERATIONS = new Map();
+  const visites = new Set();
+
+  for(const id of PERSONNES.keys()){
+    if(visites.has(id)) continue;
+    GENERATIONS.set(id, 0);
+    visites.add(id);
+    const file = [id];
+    while(file.length){
+      const cour = file.shift();
+      const g = GENERATIONS.get(cour);
+      (spouseOf.get(cour) || []).forEach(s => { if(!visites.has(s)){ GENERATIONS.set(s, g); visites.add(s); file.push(s); } });
+      (childrenOf.get(cour) || []).forEach(c => { if(!visites.has(c)){ GENERATIONS.set(c, g + 1); visites.add(c); file.push(c); } });
+      (parentsOf.get(cour) || []).forEach(p => { if(!visites.has(p)){ GENERATIONS.set(p, g - 1); visites.add(p); file.push(p); } });
+    }
+  }
+  return GENERATIONS;
+}
+
+function nomDe(id){
+  const p = PERSONNES.get(id);
+  return p ? (p.nom_usuel || '?') : '?';
+}
+
+function construireVueEnsemble(){
+  const GENERATIONS = calculerGenerations();
+  const parLigne = new Map(); // numéro relatif -> [ids]
+  GENERATIONS.forEach((g, id) => {
+    if(!parLigne.has(g)) parLigne.set(g, []);
+    parLigne.get(g).push(id);
+  });
+
+  const numeros = [...parLigne.keys()].sort((a,b) => a - b);
+  const conteneur = document.getElementById('vueEnsemble');
+  conteneur.innerHTML = '';
+
+  // Empêche un conjoint (ou une personne déjà affichée en couple) d'être
+  // redessiné une 2e fois ailleurs dans le même bloc de génération.
+  const dejaAffiche = new Set();
+
+  const carteDe = (pid, conjointAffiche) => {
+    const p = PERSONNES.get(pid);
+    const carte = document.createElement('div');
+    carte.className = 'personne-carte';
+    if(!p){
+      // Référence orpheline : un mariage/filiation pointe vers un id absent
+      // de la table personnes. On ne plante pas, on signale et on affiche
+      // un marqueur pour que la vue reste utilisable.
+      console.warn('Vue d\'ensemble : id référencé (mariage/filiation) mais absent de PERSONNES ->', pid);
+      carte.textContent = '⚠️ Personne inconnue (id: ' + pid + ')';
+      carte.style.color = '#c0392b';
+      return carte;
+    }
+    const nom = document.createElement('div');
+    nom.className = 'personne-nom ' + (p.sexe === 'Femme' ? 'femme' : 'homme');
+    const regne = [p.regne_debut, p.regne_fin].filter(Boolean).join(' – ');
+    nom.textContent = nomDe(pid) + (regne ? ` (${regne})` : '');
+    carte.appendChild(nom);
+    carte.style.cursor = 'pointer';
+    carte.addEventListener('click', () => carte.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }));
+
+    const parents = (parentsOf.get(pid) || []).map(nomDe);
+    const enfants = (childrenOf.get(pid) || []).map(nomDe);
+    const autresConjoints = (spouseOf.get(pid) || [])
+      .filter(sid => sid !== conjointAffiche)
+      .map(nomDe);
+
+    const lignes = [];
+    if(parents.length) lignes.push('Parent(s) : ' + parents.join(', '));
+    if(enfants.length) lignes.push('Enfant(s) : ' + enfants.join(', '));
+    if(autresConjoints.length) lignes.push('Autre(s) union(s) : ' + autresConjoints.join(', '));
+
+    if(lignes.length){
+      const details = document.createElement('div');
+      details.className = 'personne-details';
+      details.innerHTML = lignes.join('<br>');
+      carte.appendChild(details);
+    }
+    return carte;
+  };
+
+  // Rend une personne seule, ou en couple avec son 1er conjoint disponible
+  // (les remariages éventuels restent listés en texte dans "Autre(s) union(s)").
+  // Retourne null si la personne a déjà été affichée comme conjoint ailleurs.
+  const rendreUnite = (id) => {
+    if(dejaAffiche.has(id)) return null;
+    dejaAffiche.add(id);
+    const conjointId = (spouseOf.get(id) || []).find(sid => PERSONNES.has(sid) && !dejaAffiche.has(sid));
+    if(conjointId){
+      dejaAffiche.add(conjointId);
+      const pair = document.createElement('div');
+      pair.className = 'couple-pair';
+      pair.appendChild(carteDe(id, conjointId));
+      const connecteur = document.createElement('div');
+      connecteur.className = 'couple-connecteur';
+      pair.appendChild(connecteur);
+      pair.appendChild(carteDe(conjointId, id));
+      return pair;
+    }
+    return carteDe(id, null);
+  };
+
+  const rendreGroupe = (ids, avecBracket) => {
+    const groupe = document.createElement('div');
+    groupe.className = 'fratrie-groupe' + (avecBracket && ids.length > 1 ? ' a-plusieurs-membres' : '');
+    ids.slice().sort((a,b) => nomDe(a).localeCompare(nomDe(b))).forEach(id => {
+      const unite = rendreUnite(id);
+      if(!unite) return; // déjà affiché comme conjoint d'un frère/soeur précédent
+      const membre = document.createElement('div');
+      membre.className = 'fratrie-membre';
+      membre.appendChild(unite);
+      groupe.appendChild(membre);
+    });
+    return groupe.children.length ? groupe : null;
+  };
+
+  numeros.forEach((num, index) => {
+    const idsGen = parLigne.get(num);
+
+    // Regroupe par fratrie : même paire de parents = même bracket vert.
+    const fratries = new Map(); // clé (parents triés) -> [ids]
+    const sansFratrie = [];
+    idsGen.forEach(id => {
+      const parents = (parentsOf.get(id) || []).slice().sort();
+      if(parents.length){
+        const cle = parents.join('|');
+        if(!fratries.has(cle)) fratries.set(cle, []);
+        fratries.get(cle).push(id);
+      } else {
+        sansFratrie.push(id); // racine de l'arbre, pas de parents connus
+      }
+    });
+
+    const bloc = document.createElement('div');
+    bloc.className = 'generation-bloc';
+    const titre = document.createElement('div');
+    titre.className = 'generation-titre';
+    titre.textContent = `Génération ${index + 1} (${idsGen.length} personne${idsGen.length > 1 ? 's' : ''})`;
+    bloc.appendChild(titre);
+
+    fratries.forEach(ids => {
+      const groupe = rendreGroupe(ids, true);
+      if(groupe) bloc.appendChild(groupe);
+    });
+    if(sansFratrie.length){
+      const groupe = rendreGroupe(sansFratrie, false);
+      if(groupe) bloc.appendChild(groupe);
+    }
+
+    conteneur.appendChild(bloc);
+  });
+}
+
+/* =========================================================================
+   VUE GRAPHIQUE — diagramme complet reliant les générations entre elles.
+   Technique : dessin de graphe par couches (proche de Sugiyama), construite
+   sur le principe "l'union (le couple) = le nœud", pas la personne :
+     - chaque mariage devient une "union" avec ses 2 membres toujours adjacents
+       (une personne remariée apparaît dans plusieurs unions, une par mariage)
+     - chaque génération est une rangée d'unions
+     - l'ORDRE des unions dans une rangée est calculé par barycentre (moyenne
+       des positions x de leurs unions-parents dans la rangée du dessus),
+       pas par ordre d'arrivée des données — ça réduit fortement les croisements
+     - chaque enfant se relie via un connecteur en coude à l'union EXACTE de
+       ses parents identifiés (pas au centre approximatif d'un groupe)
+   ========================================================================= */
+const VG = {
+  LARGEUR_PERSONNE: 150,
+  HAUTEUR_BOITE: 46,
+  ECART_COUPLE: 14,
+  ECART_UNION: 36,
+  ECART_RACINES: 90,
+  HAUTEUR_LIGNE: 220,
+  MARGE: 50,
+};
+
+// Hauteur de vignette selon le rôle : un roi a une vignette 2 fois plus
+// haute que les autres, mais toujours centrée sur la même ligne
+// horizontale de génération que le reste de la rangée (pas juste alignée
+// en haut) — elle déborde donc autant vers le haut que vers le bas.
+function hauteurBoiteDe(pid){
+  const p = PERSONNES.get(pid);
+  return (p && p.role === 'roi') ? VG.HAUTEUR_BOITE * 2 : VG.HAUTEUR_BOITE;
+}
+function bordsBoiteDe(u, pid){
+  const centre = u.y + VG.HAUTEUR_BOITE / 2;
+  const h = hauteurBoiteDe(pid);
+  return { top: centre - h / 2, bottom: centre + h / 2, hauteur: h };
+}
+
+// Remonte la lignée d'une personne (père en priorité, sinon mère) jusqu'à
+// son ancêtre le plus lointain connu dans les données. Sert de repère pour
+// deviner de quel côté de l'écran se trouve la famille d'origine de
+// quelqu'un, sans avoir besoin des positions x réelles (pas encore connues
+// à ce stade du calcul) — les racines étant elles-mêmes placées par ordre
+// alphabétique de leur nom, ce repère suit la même logique.
+function trouverAncetreRacine(id, visite){
+  visite = visite || new Set();
+  if(visite.has(id)) return id; // sécurité anti-cycle
+  visite.add(id);
+  const f = FILIATIONS.find(x => x.enfant === id);
+  if(!f) return id;
+  const suivant = (f.pere && PERSONNES.has(f.pere)) ? f.pere : ((f.mere && PERSONNES.has(f.mere)) ? f.mere : null);
+  if(!suivant) return id;
+  return trouverAncetreRacine(suivant, visite);
+}
+
+function calculerUnions(){
+  const unions = new Map();       // unionId -> {id, membres:[...], gen, anchor?}
+  const personToUnions = new Map(); // personId -> [unionId,...]
+  const ajouterAppartenance = (pid, uid) => {
+    if(!personToUnions.has(pid)) personToUnions.set(pid, []);
+    personToUnions.get(pid).push(uid);
+  };
+
+  // ---- 1) Compte des mariages par personne : une personne présente dans
+  // 2+ mariages valides est une "ancre" (ex. un roi avec plusieurs épouses)
+  // — ses mariages seront fusionnés en une seule union (elle au centre,
+  // conjoints répartis de chaque côté) plutôt que dupliquée en plusieurs
+  // unions "racines" indépendantes. ----
+  const mariagesValides = MARIAGES.filter(m => PERSONNES.has(m.p1) && PERSONNES.has(m.p2)
+    && GENERATIONS_VG.get(m.p1) !== undefined && GENERATIONS_VG.get(m.p2) !== undefined);
+  const compteMariages = new Map();
+  mariagesValides.forEach(m => {
+    compteMariages.set(m.p1, (compteMariages.get(m.p1) || 0) + 1);
+    compteMariages.set(m.p2, (compteMariages.get(m.p2) || 0) + 1);
+  });
+
+  const mariagesTraites = new Set();
+  const ancresDejaFusionnees = new Set();
+
+  mariagesValides.forEach(m => {
+    if(mariagesTraites.has(m.id)) return;
+    const c1 = compteMariages.get(m.p1) || 0;
+    const c2 = compteMariages.get(m.p2) || 0;
+
+    // Ancre = la personne des 2 ayant plusieurs mariages (cas ambigu où les
+    // 2 en ont plusieurs : traité au cas par cas, non fusionné, très rare).
+    let ancre = null;
+    if(c1 > 1 && c2 <= 1) ancre = m.p1;
+    else if(c2 > 1 && c1 <= 1) ancre = m.p2;
+
+    if(!ancre || ancresDejaFusionnees.has(ancre)){
+      // Mariage simple (personne monogame des 2 côtés) : comportement inchangé.
+      const g1 = GENERATIONS_VG.get(m.p1), g2 = GENERATIONS_VG.get(m.p2);
+      const uid = 'u' + m.id;
+      unions.set(uid, { id: uid, membres: [m.p1, m.p2], gen: Math.min(g1, g2) });
+      ajouterAppartenance(m.p1, uid);
+      ajouterAppartenance(m.p2, uid);
+      mariagesTraites.add(m.id);
+      return;
+    }
+
+    // Fusion : tous les mariages de cette ancre, triés par "ordre" (mariage
+    // le plus ancien/important en premier, adjacent à l'ancre).
+    ancresDejaFusionnees.add(ancre);
+    const mariagesAncre = mariagesValides
+      .filter(mm => mm.p1 === ancre || mm.p2 === ancre)
+      .sort((a, b) => (a.ordre ?? 999) - (b.ordre ?? 999));
+    const conjoints = mariagesAncre.map(mm => mm.p1 === ancre ? mm.p2 : mm.p1);
+
+    // Répartition gauche/droite : basée sur la famille d'origine de chaque
+    // conjoint (son ancêtre racine) comparée aux AUTRES conjoints — pas à
+    // l'ancre elle-même, qui n'a aucun rapport avec la position relative
+    // souhaitée entre les épouses. On trie les conjoints par nom de racine,
+    // puis on coupe en 2 moitiés : la moitié "avant" à gauche, la moitié
+    // "après" à droite — ceux dont la racine est la plus proche du point de
+    // coupure (donc la plus proche des autres) restent adjacents à l'ancre,
+    // les plus "extrêmes" partent aux extrémités. Ça garantit une vraie
+    // répartition des deux côtés (jamais tout un même côté), tout en
+    // limitant les croisements avec les liens vers leurs familles respectives.
+    const conjointsAvecRacine = conjoints.map(cid => ({ cid, racine: nomDe(trouverAncetreRacine(cid)) }));
+    conjointsAvecRacine.sort((a, b) => a.racine.localeCompare(b.racine));
+    const milieu = Math.ceil(conjointsAvecRacine.length / 2);
+    const gauche = conjointsAvecRacine.slice(0, milieu).map(c => c.cid);
+    const droite = conjointsAvecRacine.slice(milieu).map(c => c.cid);
+    const membres = [...gauche, ancre, ...droite];
+
+    const gensConcernes = [ancre, ...conjoints].map(id => GENERATIONS_VG.get(id)).filter(g => g !== undefined);
+    const uid = 'u-fusion-' + ancre;
+    unions.set(uid, { id: uid, membres, gen: Math.min(...gensConcernes), anchor: ancre });
+    membres.forEach(pid => ajouterAppartenance(pid, uid));
+    mariagesAncre.forEach(mm => mariagesTraites.add(mm.id));
+  });
+
+  // Personnes jamais mariées (dans ce jeu de données) : union "solo".
+  PERSONNES.forEach((p, id) => {
+    if(!personToUnions.has(id)){
+      const uid = 's' + id;
+      const gen = GENERATIONS_VG.get(id);
+      if(gen === undefined) return;
+      unions.set(uid, { id: uid, membres: [id], gen });
+      ajouterAppartenance(id, uid);
+    }
+  });
+
+  return { unions, personToUnions };
+}
+
+function calculerLiensFiliation(personToUnions){
+  // Pour chaque enfant, détermine l'union EXACTE représentant ses parents.
+  const unionParentDe = new Map(); // enfantId -> unionId | null
+  FILIATIONS.forEach(f => {
+    if(!PERSONNES.has(f.enfant)) return;
+    const pere = f.pere && PERSONNES.has(f.pere) ? f.pere : null;
+    const mere = f.mere && PERSONNES.has(f.mere) ? f.mere : null;
+    let unionTrouvee = null;
+
+    if(pere && mere){
+      const unionsPere = personToUnions.get(pere) || [];
+      const unionsMere = new Set(personToUnions.get(mere) || []);
+      unionTrouvee = unionsPere.find(uid => unionsMere.has(uid)) || null;
+    }
+    if(!unionTrouvee && pere) unionTrouvee = (personToUnions.get(pere) || [])[0] || null;
+    if(!unionTrouvee && mere) unionTrouvee = (personToUnions.get(mere) || [])[0] || null;
+
+    if(unionTrouvee) unionParentDe.set(f.enfant, unionTrouvee);
+  });
+  return unionParentDe;
+}
+
+const MAX_GEN_AFFICHEES = 4; // limite volontaire de profondeur (cf. discussion du 21/08/2026)
+
+function ordonnerEtPositionner(unions, unionParentDe){
+  const nomUnion = u => nomDe(u.membres[0]);
+
+  // ---- 1) Détection des ponts (union à 2 membres dont les parents sont 2
+  // unions DIFFÉRENTES) ----
+  const pontsDetectes = new Map(); // pontId -> [unionIdParent1, unionIdParent2]
+  unions.forEach(u => {
+    if(u.membres.length !== 2) return;
+    const [m1, m2] = u.membres;
+    const parent1 = unionParentDe.get(m1) || null;
+    const parent2 = unionParentDe.get(m2) || null;
+    if(parent1 && parent2 && parent1 !== parent2) pontsDetectes.set(u.id, [parent1, parent2]);
+  });
+
+  // ---- 2) Racines (indépendant de l'adjacence) ----
+  const racines = [...unions.values()].filter(u =>
+    !pontsDetectes.has(u.id) &&
+    u.membres.every(m => !unionParentDe.get(m))
+  );
+  racines.sort((a,b) => nomUnion(a).localeCompare(nomUnion(b)));
+
+  // ---- 3) Parmi les ponts, lesquels relient directement 2 racines
+  // ADJACENTES dans l'ordre choisi ? Ceux-là auront leur PROPRE zone
+  // réservée, centrée entre les 2 familles (le cas le plus important
+  // visuellement — ex. Guy+Marie-Françoise entre Joseph et Jules). ----
+  const pontsRacinesAdjacentes = new Map(); // racine de gauche -> pontId
+  racines.forEach((u, idx) => {
+    if(idx >= racines.length - 1) return;
+    const suivante = racines[idx + 1];
+    const trouve = [...pontsDetectes.entries()].find(([pid, [p1, p2]]) =>
+      (p1 === u.id && p2 === suivante.id) || (p1 === suivante.id && p2 === u.id)
+    );
+    if(trouve) pontsRacinesAdjacentes.set(u.id, trouve[0]);
+  });
+  const pontsGeresParAdjacence = new Set(pontsRacinesAdjacentes.values());
+
+  // ---- 4) Ponts restants (plus profonds, ou ne reliant pas 2 racines
+  // adjacentes) : rattachés comme enfant NORMAL de leur "parent porteur"
+  // (le 1er membre du mariage, déterministe) — ça garantit l'absence de
+  // chevauchement à N'IMPORTE QUELLE profondeur, car ils suivent alors
+  // exactement le même algorithme récursif, garanti correct, que n'importe
+  // quel autre enfant. Le lien de filiation vers le VRAI 2e parent (l'autre
+  // famille) est quand même dessiné — juste en pointillés, plus long,
+  // exactement comme un arbre généalogique classique représente un mariage
+  // entre 2 branches non voisines à l'écran. ----
+  const parentPorteurPont = new Map(); // pontId -> unionId (parent porteur)
+  const membreNonPorteurPont = new Map(); // pontId -> personId (lien en pointillés)
+  pontsDetectes.forEach(([p1, p2], pid) => {
+    if(pontsGeresParAdjacence.has(pid)) return;
+    parentPorteurPont.set(pid, p1);
+    const u = unions.get(pid);
+    membreNonPorteurPont.set(pid, unionParentDe.get(u.membres[0]) === p1 ? u.membres[1] : u.membres[0]);
+  });
+
+  // ---- 4bis) Généralisation à N membres : une union (fusionnée ou non)
+  // dont les membres ont des parents RÉELS différents ne peut être placée
+  // comme "enfant" que d'UN seul de ces parents (le "porteur") — l'étape 1
+  // ne couvrait que les unions à 2 membres (mariage classique), mais une
+  // union fusionnée (roi + plusieurs épouses, 3+ membres) pose exactement
+  // le même problème : sans ce garde-fou, 2 familles différentes tentent
+  // de se l'approprier comme enfant, la 2e écrasant silencieusement le
+  // positionnement de la 1re. Le porteur privilégié est le parent de
+  // l'ancre (le roi) s'il est connu ; à défaut, le 1er parent rencontré
+  // dans l'ordre des membres. Tout membre dont le parent réel n'est PAS
+  // celui du porteur reçoit un lien de filiation en pont vers sa vraie
+  // famille — jamais un enfant "normal" positionné 2 fois.
+  const parentPorteurGeneralise = new Map(); // unionId -> unionIdParent porteur
+  const membresNonPorteurGeneralise = new Set(); // personId dont le lien vers son vrai parent est un pont
+  unions.forEach(u => {
+    const parentsDistincts = [];
+    u.membres.forEach(m => {
+      const p = unionParentDe.get(m);
+      if(p && !parentsDistincts.includes(p)) parentsDistincts.push(p);
+    });
+    if(parentsDistincts.length < 2) return; // rien à arbitrer
+    const porteur = (u.anchor && unionParentDe.get(u.anchor)) || parentsDistincts[0];
+    parentPorteurGeneralise.set(u.id, porteur);
+    u.membres.forEach(m => {
+      const p = unionParentDe.get(m);
+      if(p && p !== porteur) membresNonPorteurGeneralise.add(m);
+    });
+  });
+
+  // ---- 5) Listes d'enfants "normaux" par union, limite de génération
+  // appliquée ici (une union dont la génération approximative dépasse la
+  // limite n'est simplement jamais ajoutée comme enfant). ----
+  const enfantsUnionsPar = new Map();
+  unions.forEach(uParent => {
+    const enfantsUnions = new Set();
+    uParent.membres.forEach(m => {
+      (childrenOf.get(m) || []).forEach(enfantId => {
+        if(unionParentDe.get(enfantId) !== uParent.id) return;
+        const unionsEnfant = personToUnionsGlobal.get(enfantId) || [];
+        const unionEnfant = unionsEnfant[0];
+        if(!unionEnfant) return;
+        const uEnfant = unions.get(unionEnfant);
+        if(!uEnfant || uEnfant.gen >= MAX_GEN_AFFICHEES) return;
+        if(pontsGeresParAdjacence.has(unionEnfant)) return; // géré à part
+        if(parentPorteurGeneralise.has(unionEnfant) && parentPorteurGeneralise.get(unionEnfant) !== uParent.id) return; // pas le parent porteur
+        enfantsUnions.add(unionEnfant);
+      });
+    });
+    enfantsUnionsPar.set(uParent.id, [...enfantsUnions]);
+  });
+
+  // Largeur "propre" d'une union : généralisée à N membres alignés côte à
+  // côte (2 pour un couple classique, jusqu'à 5-6 pour un roi entouré de
+  // ses épouses).
+  function largeurPropreUnion(u){
+    return u.membres.length * VG.LARGEUR_PERSONNE + (u.membres.length - 1) * VG.ECART_COUPLE;
+  }
+
+  // ---- 6) Largeur récursive (bottom-up) ----
+  const cacheLargeur = new Map();
+  function largeurUnion(uid){
+    if(cacheLargeur.has(uid)) return cacheLargeur.get(uid);
+    const u = unions.get(uid);
+    const largeurPropre = largeurPropreUnion(u);
+    const enfants = enfantsUnionsPar.get(uid) || [];
+    let largeur = largeurPropre;
+    if(enfants.length){
+      let total = 0;
+      enfants.forEach((eid, idx) => {
+        total += largeurUnion(eid);
+        if(idx < enfants.length - 1) total += VG.ECART_UNION;
+      });
+      largeur = Math.max(largeurPropre, total);
+    }
+    cacheLargeur.set(uid, largeur);
+    return largeur;
+  }
+  unions.forEach(u => { if(u.gen < MAX_GEN_AFFICHEES) largeurUnion(u.id); });
+
+  // ---- 7) Placement récursif top-down ----
+  function placerUnion(uid, xDebut, gen){
+    const u = unions.get(uid);
+    const largeurPropre = largeurPropreUnion(u);
+    const largeur = largeurUnion(uid);
+    const decalage = (largeur - largeurPropre) / 2;
+    u.x = xDebut + decalage;
+    u.gen = gen;
+    u.y = VG.MARGE + gen * VG.HAUTEUR_LIGNE;
+    u.centreX = u.x + largeurPropre / 2;
+    u.largeurPropre = largeurPropre;
+    u.centreMembre = {};
+    u.membres.forEach((pid, i) => {
+      u.centreMembre[pid] = u.x + i * (VG.LARGEUR_PERSONNE + VG.ECART_COUPLE) + VG.LARGEUR_PERSONNE / 2;
+    });
+
+    const enfants = enfantsUnionsPar.get(uid) || [];
+    let xEnfant = xDebut;
+    enfants.forEach(eid => {
+      placerUnion(eid, xEnfant, gen + 1);
+      xEnfant += largeurUnion(eid) + VG.ECART_UNION;
+    });
+  }
+
+  // ---- 8) Placement des racines, avec insertion des zones-ponts adjacentes ----
+  // Génération de départ par racine, selon sa dynastie : par défaut,
+  // chaque racine (famille indépendante, sans parent connu) démarrerait à
+  // la génération 0 — mais si sa dynastie est postérieure à celle d'une
+  // autre racine de l'arbre, elle démarre plus bas d'autant de générations
+  // que l'écart entre les 2 numéros de dynastie (ex : XVIIIe vs XVIIe = 1
+  // génération plus bas), pour refléter l'ordre chronologique réel même
+  // quand aucun lien de sang direct ne les relie au même niveau.
+  const numeroDynastieRacine = (texte) => {
+    if (!texte) return null;
+    const rom = String(texte).match(/[IVXLCDM]+/i);
+    if (rom) {
+      const chiffres = { I:1, V:5, X:10, L:50, C:100, D:500, M:1000 };
+      const s = rom[0].toUpperCase();
+      let total = 0;
+      for (let i = 0; i < s.length; i++) {
+        const cur = chiffres[s[i]], suiv = chiffres[s[i + 1]];
+        total += (suiv && cur < suiv) ? -cur : cur;
+      }
+      return total || null;
+    }
+    const num = String(texte).match(/\d+/);
+    return num ? parseInt(num[0], 10) : null;
+  };
+  const dynastieDeRacine = (u) => {
+    let d = null;
+    u.membres.forEach(id => {
+      const p = PERSONNES.get(id);
+      if (p && p.role === 'roi' && p.dynastie) {
+        const num = numeroDynastieRacine(p.dynastie);
+        if (num !== null) d = num;
+      }
+    });
+    return d;
+  };
+  const dynastiesRacines = racines.map(dynastieDeRacine);
+  const dynastiesConnues = dynastiesRacines.filter(d => d !== null);
+  const dynastieBaseRacine = dynastiesConnues.length ? Math.min(...dynastiesConnues) : null;
+
+  const pontsDejaPlaces = new Set();
+  let x = VG.MARGE;
+  racines.forEach((u, idx) => {
+    const dyn = dynastiesRacines[idx];
+    const genDepart = (dynastieBaseRacine !== null && dyn !== null) ? (dyn - dynastieBaseRacine) : 0;
+    placerUnion(u.id, x, genDepart);
+    x += largeurUnion(u.id) + VG.ECART_RACINES;
+
+    const pontId = pontsRacinesAdjacentes.get(u.id);
+    if(pontId){
+      const suivante = racines[idx + 1];
+      const genPont = Math.max(u.gen, suivante.gen) + 1;
+      if(genPont < MAX_GEN_AFFICHEES){
+        placerUnion(pontId, x, genPont);
+        pontsDejaPlaces.add(pontId);
+        x += largeurUnion(pontId) + VG.ECART_RACINES;
+      }
+    }
+  });
+
+  // Filet de sécurité : signale en console tout chevauchement résiduel.
+  const parGenFinal = new Map();
+  unions.forEach(u => {
+    if(u.x === undefined) return; // union hors limite d'affichage, jamais placée
+    if(!parGenFinal.has(u.gen)) parGenFinal.set(u.gen, []);
+    parGenFinal.get(u.gen).push(u);
+  });
+  parGenFinal.forEach(ligne => {
+    ligne.sort((a,b) => a.x - b.x);
+    for(let i = 0; i < ligne.length - 1; i++){
+      if(ligne[i].x + ligne[i].largeurPropre > ligne[i+1].x + 0.5){
+        console.warn('Vue graphique : chevauchement détecté entre', nomUnion(ligne[i]), 'et', nomUnion(ligne[i+1]));
+      }
+    }
+  });
+
+  const generationsTriees = [...parGenFinal.keys()].sort((a,b) => a - b);
+  return { generationsTriees, membreNonPorteurPont, membresNonPorteurGeneralise };
+}
+
+let GENERATIONS_VG = new Map();
+let personToUnionsGlobal = new Map();
+
+// ============================================================
+// Recentrage de la vue au clic sur une personne (vue graphique SVG)
+// ============================================================
+function centrerSurPersonne(x, y){
+  const zone = document.getElementById('zoneCanevas');
+  zone.scrollTo({
+    left: x - zone.clientWidth / 2,
+    top: y - zone.clientHeight / 2,
+    behavior: 'smooth'
+  });
+}
+
+function construireVueGraphique(){
+  GENERATIONS_VG = calculerGenerations();
+  const { unions, personToUnions } = calculerUnions();
+  personToUnionsGlobal = personToUnions;
+  const unionParentDe = calculerLiensFiliation(personToUnions);
+  const { generationsTriees, membreNonPorteurPont, membresNonPorteurGeneralise } = ordonnerEtPositionner(unions, unionParentDe);
+
+  // Unions effectivement placées (certaines sont hors limite d'affichage
+  // volontaire, cf. MAX_GEN_AFFICHEES, et n'ont donc jamais reçu de position).
+  const unionsPlacees = [...unions.values()].filter(u => u.x !== undefined);
+  const personnesAffichees = new Set();
+  unionsPlacees.forEach(u => u.membres.forEach(m => personnesAffichees.add(m)));
+  const nbMasquees = PERSONNES.size - personnesAffichees.size;
+
+  const svg = document.getElementById('vueGraphique');
+  svg.innerHTML = '';
+  const noteEl = document.getElementById('vueGraphiqueNote');
+  const messageNote = nbMasquees > 0
+    ? `Affichage limité aux ${MAX_GEN_AFFICHEES} premières générations (${nbMasquees} personne${nbMasquees > 1 ? 's' : ''} au-delà, non affichée${nbMasquees > 1 ? 's' : ''}).`
+    : '';
+  noteEl.textContent = messageNote;
+  noteEl.style.display = 'none'; // affichée uniquement quand basculerVue('graphique') est active
+
+  if(unionsPlacees.length === 0){
+    svg.setAttribute('viewBox', '0 0 100 100');
+    return;
+  }
+
+  const ns = 'http://www.w3.org/2000/svg';
+  const creer = (tag, attrs) => {
+    const el = document.createElementNS(ns, tag);
+    Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k, v));
+    return el;
+  };
+
+  // Liens "pont profond" (union non gérée par la réservation de zone
+  // adjacente) : le membre non-porteur reçoit un lien en pointillés vers
+  // sa vraie famille d'origine, pour le distinguer visuellement d'un lien
+  // de filiation classique.
+  const liensEnPointilles = new Set([...membreNonPorteurPont.values(), ...membresNonPorteurGeneralise]);
+
+  // Hauteur du haut/bas de chaque "couloir" entre génération g et g+1.
+  const hautCouloir = g => VG.MARGE + g * VG.HAUTEUR_LIGNE + VG.HAUTEUR_BOITE;
+  const basCouloir = g => VG.MARGE + (g + 1) * VG.HAUTEUR_LIGNE;
+  const FRACTION_VOIE_NORMALE = 0.5;
+  const FRACTION_VOIE_PONT = 0.72; // voie dédiée, plus basse, pour les liens en pointillés
+
+  // Étiquettes de génération, à gauche.
+  generationsTriees.forEach((gen, index) => {
+    const y = VG.MARGE + index * VG.HAUTEUR_LIGNE + VG.HAUTEUR_BOITE / 2 + 4;
+    const t = creer('text', { class:'etiquette-generation', x: 4, y });
+    t.textContent = `Génération ${index + 1}`;
+    svg.appendChild(t);
+  });
+
+  // 1a) Connecteurs de filiation NORMAUX (toujours 1 seule génération
+  // d'écart, jamais de pont profond) — dessinés en premier ; on retient
+  // aussi leurs segments verticaux par "couloir" pour permettre aux liens
+  // en pointillés de sauter proprement par-dessus s'ils les croisent.
+  const segmentsVerticauxParCouloir = new Map(); // gap -> [{x, yFrom, yTo}, ...]
+  const ajouterSegment = (gap, x, yFrom, yTo) => {
+    if(!segmentsVerticauxParCouloir.has(gap)) segmentsVerticauxParCouloir.set(gap, []);
+    segmentsVerticauxParCouloir.get(gap).push({ x, yFrom: Math.min(yFrom,yTo), yTo: Math.max(yFrom,yTo) });
+  };
+  const segmentsHorizontauxParCouloir = new Map(); // gap -> [{y, xFrom, xTo}, ...]
+  const ajouterSegmentH = (gap, y, xFrom, xTo) => {
+    if(!segmentsHorizontauxParCouloir.has(gap)) segmentsHorizontauxParCouloir.set(gap, []);
+    segmentsHorizontauxParCouloir.get(gap).push({ y, xFrom: Math.min(xFrom,xTo), xTo: Math.max(xFrom,xTo) });
+  };
+
+  const tousConnecteurs = [];
+  const filiationDe = new Map(); // enfantId -> {pere, mere}
+  FILIATIONS.forEach(f => filiationDe.set(f.enfant, { pere: f.pere, mere: f.mere, incertain: !!(f.pereIncertain || f.mereIncertaine) }));
+  unionsPlacees.forEach(u => {
+    u.membres.forEach(m => {
+      const uidParent = unionParentDe.get(m);
+      if(!uidParent) return;
+      const uParent = unions.get(uidParent);
+      if(!uParent || uParent.x === undefined) return; // parent hors limite d'affichage
+
+      // Point de départ du trait : le milieu exact entre les 2 VRAIS parents
+      // de cet enfant (pas le centre de toute la ligne, qui peut compter
+      // d'autres conjoints ne concernant pas cet enfant — cas d'un roi avec
+      // plusieurs épouses).
+      const fil = filiationDe.get(m);
+      let x1;
+      const xPere = fil && fil.pere !== undefined ? uParent.centreMembre[fil.pere] : undefined;
+      const xMere = fil && fil.mere !== undefined ? uParent.centreMembre[fil.mere] : undefined;
+      if(xPere !== undefined && xMere !== undefined) x1 = (xPere + xMere) / 2;
+      else if(xPere !== undefined) x1 = xPere;
+      else if(xMere !== undefined) x1 = xMere;
+      else x1 = uParent.centreMembre[m] !== undefined ? uParent.centreMembre[m] : uParent.centreX;
+
+      // Le trait part du bas réel du/des parent(s) connu(s) — le plus bas
+      // des deux si père et mère ont des hauteurs différentes (l'un roi,
+      // l'autre non) — et arrive sur le haut réel de l'enfant, pour ne
+      // jamais couper à travers une vignette de roi surélevée.
+      const yPereBas = fil && fil.pere !== undefined ? bordsBoiteDe(uParent, fil.pere).bottom : undefined;
+      const yMereBas = fil && fil.mere !== undefined ? bordsBoiteDe(uParent, fil.mere).bottom : undefined;
+      const y1 = (yPereBas !== undefined || yMereBas !== undefined)
+        ? Math.max(yPereBas ?? -Infinity, yMereBas ?? -Infinity)
+        : uParent.y + VG.HAUTEUR_BOITE;
+      const x2 = u.centreMembre[m];
+      const y2 = bordsBoiteDe(u, m).top;
+      // estPont : soit détecté structurellement (remariage classique, union
+      // à 2 membres), soit — cas non couvert par cette détection, ex. une
+      // union fusionnée à 3+ membres (roi + plusieurs épouses) dont un
+      // membre a ses parents ailleurs — sera de toute façon repéré et
+      // basculé en pont plus bas s'il croise un autre lien.
+      // clefFratrie : les enfants qui partagent EXACTEMENT le même père et
+      // la même mère doivent partager le même tronc (même hauteur de
+      // ligne), même si l'un d'eux est par ailleurs individuellement
+      // marqué "pont" pour une tout autre raison (ex. son propre mariage).
+      const clefFratrie = uidParent + '|' + (fil && fil.pere || '') + '|' + (fil && fil.mere || '');
+      tousConnecteurs.push({ x1, y1, x2, y2, gapDebut: uParent.gen, gapFin: u.gen, incertain: !!(fil && fil.incertain), estPont: liensEnPointilles.has(m), estPontStructurel: liensEnPointilles.has(m), clefFratrie });
+    });
+  });
+
+  // Uniformise la HAUTEUR de ligne au sein d'une même fratrie (même père +
+  // même mère) : si l'un des enfants est structurellement un pont, tous
+  // ses frères et sœurs partagent cette même hauteur, pour que leurs
+  // traits partent visuellement du même tronc plutôt que de diverger dès
+  // le départ. Ça ne touche QUE la hauteur (estPont, pour le calcul de
+  // laneY) — jamais le style visuel pointillé : celui-ci reste basé sur
+  // estPontStructurel, individuel à chaque enfant, pour qu'un enfant dont
+  // le lien est certain reste en trait plein même si sa sœur, à côté,
+  // est en pointillé pour son propre lien incertain ou son propre statut
+  // de pont.
+  const pontParFratrie = new Map();
+  tousConnecteurs.forEach(c => {
+    if(c.estPont) pontParFratrie.set(c.clefFratrie, true);
+  });
+  tousConnecteurs.forEach(c => {
+    if(pontParFratrie.get(c.clefFratrie)) c.estPont = true;
+  });
+
+  // Les ponts qui traversent 2 générations ou plus ont besoin chacun d'un
+  // "canal" réservé en marge, à droite de tout le contenu : plutôt que de
+  // les faufiler entre les personnes (risque de croiser des cadres ou des
+  // traits de mariage), ils sortent du contenu, descendent tout du long
+  // dans la marge vide (donc AUCUN croisement possible sur ce tronçon), puis
+  // reviennent vers leur cible. Un pont qui ne traverse qu'1 seule
+  // génération reste géré simplement, sur place (pas besoin de détour) —
+  // sauf s'il croise un autre lien, auquel cas il est promu de la même
+  // façon (cf. plus bas).
+  const CANAL_MARGE = 40;
+  const largeurContenu = Math.max(...unionsPlacees.map(u => u.x + u.largeurPropre));
+  // Largeur du contenu par génération (pas juste le maximum global) : un
+  // pont n'a besoin de sortir que jusqu'à la limite droite des générations
+  // qu'il traverse réellement, pas jusqu'au bout de tout le diagramme —
+  // sinon il fait un aller-retour inutile vers la droite quand une autre
+  // génération, ailleurs dans l'arbre, est bien plus large que celle-ci.
+  const largeurParGeneration = new Map();
+  unionsPlacees.forEach(u => {
+    const droite = u.x + u.largeurPropre;
+    if (!largeurParGeneration.has(u.gen) || droite > largeurParGeneration.get(u.gen)) {
+      largeurParGeneration.set(u.gen, droite);
+    }
+  });
+  const largeurMaxEntre = (genA, genB) => {
+    let max = 0;
+    for (let g = Math.min(genA, genB); g <= Math.max(genA, genB); g++) {
+      const l = largeurParGeneration.get(g);
+      if (l !== undefined && l > max) max = l;
+    }
+    return max || largeurContenu;
+  };
+
+  // Intervalles horizontaux occupés par génération (une case = 1 union) :
+  // sert à chercher un vrai "couloir vide" pour un pont, plutôt que de
+  // systématiquement sortir après tout le contenu. Alimenté aussi au fil
+  // de l'eau par les canaux déjà attribués (voir plus bas), pour que 2
+  // ponts ne se superposent pas sur la même colonne.
+  const intervallesParGeneration = new Map();
+  unionsPlacees.forEach(u => {
+    if (!intervallesParGeneration.has(u.gen)) intervallesParGeneration.set(u.gen, []);
+    intervallesParGeneration.get(u.gen).push([u.x, u.x + u.largeurPropre]);
+  });
+  const colonneOccupee = (x, genA, genB) => {
+    const PADDING = 10;
+    for (let g = Math.min(genA, genB); g <= Math.max(genA, genB); g++) {
+      const intervalles = intervallesParGeneration.get(g) || [];
+      if (intervalles.some(([a, b]) => x > a - PADDING && x < b + PADDING)) return true;
+    }
+    return false;
+  };
+  const reserverColonne = (x, genA, genB) => {
+    for (let g = Math.min(genA, genB); g <= Math.max(genA, genB); g++) {
+      if (!intervallesParGeneration.has(g)) intervallesParGeneration.set(g, []);
+      intervallesParGeneration.get(g).push([x - 10, x + 10]);
+    }
+  };
+  // Cherche le PREMIER couloir vide en partant du point de départ du pont
+  // et en avançant vers sa cible (pas systématiquement vers la droite du
+  // diagramme entier) : s'il y a un espace libre juste après la famille
+  // de départ, avant même d'atteindre une autre famille sur le chemin,
+  // c'est celui-là qui est utilisé — on ne va chercher plus loin que si
+  // c'est vraiment nécessaire.
+  const trouverCanalLibre = (xDepart, xCible, genA, genB) => {
+    const sens = xCible >= xDepart ? 1 : -1;
+    const PAS = 24;
+    let x = xDepart + sens * PAS;
+    for (let essai = 0; essai < 600; essai++) {
+      if (!colonneOccupee(x, genA, genB)) return x;
+      x += sens * PAS;
+    }
+    return largeurMaxEntre(genA, genB) + CANAL_MARGE; // filet de sécurité, ne devrait jamais servir
+  };
+
+  // Petit utilitaire : segment horizontal à hauteur "laneY" dans le couloir
+  // "gap", avec saut en arc à chaque croisement d'un lien déjà posé.
+  const segmentAvecSauts = (xDepart, xArrivee, laneY, gap) => {
+    const sens = xArrivee >= xDepart ? 1 : -1;
+    const xMin = Math.min(xDepart, xArrivee), xMax = Math.max(xDepart, xArrivee);
+    const croisements = (segmentsVerticauxParCouloir.get(gap) || [])
+      .filter(s => s.yFrom <= laneY && laneY <= s.yTo && s.x > xMin + 8 && s.x < xMax - 8)
+      .map(s => s.x)
+      .sort((a,b) => sens > 0 ? a - b : b - a);
+    let frag = '';
+    croisements.forEach(xc => {
+      const avant = xc - sens * 6, apres = xc + sens * 6;
+      frag += ` L ${avant} ${laneY} A 6 6 0 0 ${sens > 0 ? 1 : 0} ${apres} ${laneY}`;
+    });
+    frag += ` L ${xArrivee} ${laneY}`;
+    return frag;
+  };
+
+  // Un lien (normal OU pont) qui croiserait un lien déjà posé — dans un
+  // sens (son horizontal traverse un vertical existant) comme dans l'autre
+  // (son vertical traverse un horizontal existant, cas d'un lien presque
+  // vertical qui coupe la voie d'un autre déjà en place) — n'est jamais
+  // simplement superposé : il est basculé en pont routé par la marge. Cette
+  // vérification s'applique à TOUS les connecteurs, pas seulement à ceux
+  // structurellement détectés comme "pont" (remariage classique) — une
+  // union fusionnée à 3+ membres (roi + plusieurs épouses) où chaque
+  // membre a ses propres parents ailleurs n'est pas détectée par ce
+  // mécanisme structurel, mais peut tout autant croiser un autre lien.
+  const croiseQuelqueChose = (x1, y1, x2, y2, laneY, gap) => {
+    const xMin = Math.min(x1, x2), xMax = Math.max(x1, x2);
+    const croiseVertical = (segmentsVerticauxParCouloir.get(gap) || [])
+      .some(s => s.yFrom <= laneY && laneY <= s.yTo && s.x > xMin + 8 && s.x < xMax - 8);
+    const verticalCroiseHorizontal = (xC, yA, yB) => {
+      const yMin = Math.min(yA, yB), yMax = Math.max(yA, yB);
+      return (segmentsHorizontauxParCouloir.get(gap) || [])
+        .some(h => h.xFrom <= xC && xC <= h.xTo && h.y > yMin + 4 && h.y < yMax - 4);
+    };
+    return croiseVertical || verticalCroiseHorizontal(x1, y1, laneY) || verticalCroiseHorizontal(x2, laneY, y2);
+  };
+
+  // Séparation par portée : au-delà d'1 génération d'écart, toujours routé
+  // par la marge (impossible de faire autrement proprement). En-deçà,
+  // traité au cas par cas ci-dessous selon qu'il croise ou non un lien
+  // déjà posé. Les connecteurs "normaux" ont toujours 1 seule génération
+  // d'écart par construction (l'arbre place systématiquement un enfant
+  // 1 génération sous son parent) — seuls les ponts structurels peuvent
+  // être plus profonds.
+  const aRouterParMarge = tousConnecteurs.filter(c => c.gapFin - c.gapDebut >= 2);
+  const aTraiterLocalement = tousConnecteurs.filter(c => c.gapFin - c.gapDebut < 2);
+
+  // Regroupés par fratrie (pas traités individuellement) : des frères et
+  // sœurs qui partagent exactement les mêmes parents doivent être acceptés
+  // ou promus EN BLOC. Sans ça, un enfant peut être basculé en pont à
+  // cause d'un croisement qui ne concerne QUE lui, tandis que son frère
+  // ou sa sœur reste en trait normal — donnant l'impression trompeuse
+  // qu'ils n'ont pas le même statut de filiation alors que si.
+  const groupesFratrie = new Map();
+  aTraiterLocalement.forEach(c => {
+    if (!groupesFratrie.has(c.clefFratrie)) groupesFratrie.set(c.clefFratrie, []);
+    groupesFratrie.get(c.clefFratrie).push(c);
+  });
+  // Groupes triés par portée maximale croissante : les fratries les plus
+  // "compactes" réservent leur place en premier.
+  const groupesOrdonnes = [...groupesFratrie.values()].sort((ga, gb) => {
+    const spanA = Math.max(...ga.map(c => Math.abs(c.x2 - c.x1)));
+    const spanB = Math.max(...gb.map(c => Math.abs(c.x2 - c.x1)));
+    return spanA - spanB;
+  });
+
+  const aPromouvoir = [];
+  const traitesLocalement = [];
+  groupesOrdonnes.forEach(groupe => {
+    const c0 = groupe[0];
+    const laneY = hautCouloir(c0.gapDebut) + (basCouloir(c0.gapDebut) - hautCouloir(c0.gapDebut)) * (c0.estPont ? FRACTION_VOIE_PONT : FRACTION_VOIE_NORMALE);
+    const xMinGroupe = Math.min(c0.x1, ...groupe.map(c => c.x2));
+    const xMaxGroupe = Math.max(c0.x1, ...groupe.map(c => c.x2));
+    // Le groupe croise quelque chose si son enveloppe globale (du tronc
+    // commun jusqu'au plus lointain des enfants) croise un lien déjà
+    // posé, OU si l'un des enfants pris individuellement croise quelque
+    // chose (cas d'un lien déjà posé qui coupe pile sa branche finale).
+    const croise = groupe.some(c =>
+      croiseQuelqueChose(xMinGroupe, c.y1, xMaxGroupe, c.y1, laneY, c.gapDebut) ||
+      croiseQuelqueChose(c.x1, c.y1, c.x2, c.y2, laneY, c.gapDebut)
+    );
+    if (croise) {
+      groupe.forEach(c => aPromouvoir.push(c));
+    } else {
+      // Gardé sur sa voie locale : on enregistre tout de suite l'empreinte
+      // de chaque enfant (2 verticaux + 1 horizontal), pour que le
+      // prochain groupe traité dans ce même couloir en tienne compte.
+      groupe.forEach(c => {
+        traitesLocalement.push({ ...c, laneY });
+        ajouterSegment(c.gapDebut, c.x1, c.y1, laneY);
+        ajouterSegment(c.gapDebut, c.x2, laneY, c.y2);
+        ajouterSegmentH(c.gapDebut, laneY, c.x1, c.x2);
+      });
+    }
+  });
+  const pontsParMarge = [...aRouterParMarge, ...aPromouvoir.map(c => ({ ...c, gapFin: c.gapDebut + 1 }))];
+
+  // On calcule dès maintenant la position de canal de chaque pont routé
+  // par la marge (pas seulement au moment de les dessiner plus bas), pour
+  // que la largeur du canevas tienne compte de leur position réelle —
+  // certains resteront proches (couloir vide trouvé rapidement), d'autres
+  // pourront aller plus loin si l'arbre est dense à cet endroit.
+  const canalXParPont = pontsParMarge.map(({x1,x2,gapDebut,gapFin}) => {
+    const gapArrivee = gapFin - 1;
+    const canalX = trouverCanalLibre(x1, x2, gapDebut, gapArrivee);
+    reserverColonne(canalX, gapDebut, gapArrivee);
+    return canalX;
+  });
+
+  // La taille du canevas dépend des positions de canal trouvées ci-dessus.
+  const largeurTotale = Math.max(largeurContenu, ...canalXParPont, 0) + VG.MARGE;
+  const hauteurTotale = generationsTriees.length * VG.HAUTEUR_LIGNE + VG.MARGE * 2;
+  svg.setAttribute('viewBox', `0 0 ${largeurTotale} ${hauteurTotale}`);
+  svg.setAttribute('width', largeurTotale);
+  svg.setAttribute('height', hauteurTotale);
+
+  traitesLocalement.forEach(({x1,y1,x2,y2,gapDebut,laneY,incertain,estPont,estPontStructurel}) => {
+    const classes = 'lien-filiation' + (estPontStructurel ? ' lien-pont-profond' : '') + (incertain ? ' lien-incertain' : '');
+    let d;
+    if (estPont) {
+      d = `M ${x1} ${y1} L ${x1} ${laneY}` + segmentAvecSauts(x1, x2, laneY, gapDebut) + ` L ${x2} ${y2}`;
+    } else {
+      d = `M ${x1} ${y1} L ${x1} ${laneY} L ${x2} ${laneY} L ${x2} ${y2}`;
+    }
+    svg.appendChild(creer('path', { class: classes, d }));
+  });
+
+  // Liens routés par la marge (portée 2+ générations, et liens promus
+  // ci-dessus car ils croisaient un autre lien) : sortent par la marge de
+  // droite, descendent tout du long dans le canal réservé (zéro
+  // croisement possible sur ce tronçon, car c'est un espace vide), puis
+  // reviennent vers leur cible — avec sauts uniquement sur les 2 courts
+  // trajets d'entrée/sortie, là où un croisement reste possible. Toujours
+  // affiché en pointillé (style "pont"), même si le lien n'était pas
+  // structurellement un pont à l'origine — la promotion elle-même
+  // signale visuellement qu'un détour a été nécessaire.
+  pontsParMarge.forEach(({x1,y1,x2,y2,gapDebut,gapFin,incertain}, index) => {
+    const gapArrivee = gapFin - 1;
+    const canalX = canalXParPont[index];
+    const laneY1 = hautCouloir(gapDebut) + (basCouloir(gapDebut) - hautCouloir(gapDebut)) * FRACTION_VOIE_PONT;
+    const laneY2 = hautCouloir(gapArrivee) + (basCouloir(gapArrivee) - hautCouloir(gapArrivee)) * FRACTION_VOIE_PONT;
+
+    let d = `M ${x1} ${y1} L ${x1} ${laneY1}`;
+    d += segmentAvecSauts(x1, canalX, laneY1, gapDebut);
+    d += ` L ${canalX} ${laneY2}`; // descente verticale dans le canal, espace vide vérifié
+    d += segmentAvecSauts(canalX, x2, laneY2, gapArrivee);
+    d += ` L ${x2} ${y2}`;
+    svg.appendChild(creer('path', { class:'lien-filiation lien-pont-profond' + (incertain ? ' lien-incertain' : ''), d }));
+  });
+
+  // 2) Connecteurs de mariage
+  unionsPlacees.forEach(u => {
+    const y = u.y + VG.HAUTEUR_BOITE / 2;
+    if(u.membres.length === 2){
+      // Cas classique : couple simple, trait droit entre les 2 boîtes adjacentes.
+      const x1 = u.x + VG.LARGEUR_PERSONNE;
+      const x2 = u.x + VG.LARGEUR_PERSONNE + VG.ECART_COUPLE;
+      svg.appendChild(creer('line', { class:'lien-mariage', x1, y1:y, x2, y2:y }));
+      return;
+    }
+    if(u.membres.length > 2 && u.anchor){
+      // Cas polygame : un trait de l'ancre (ex. le roi) vers CHAQUE conjoint.
+      // Les conjoints adjacents reçoivent un trait droit classique ; les
+      // conjoints plus éloignés (3e épouse et au-delà) reçoivent un trait
+      // décalé en hauteur pour ne pas traverser une boîte intermédiaire —
+      // même principe que les liens en pointillés (ponts profonds), mais
+      // en autonome pour ne pas toucher ce système déjà en place.
+      const idxAncre = u.membres.indexOf(u.anchor);
+      const xAncre = u.centreMembre[u.anchor];
+      u.membres.forEach((pid, idx) => {
+        if(pid === u.anchor) return;
+        const xConjoint = u.centreMembre[pid];
+        if(Math.abs(idx - idxAncre) === 1){
+          svg.appendChild(creer('line', { class:'lien-mariage', x1:xAncre, y1:y, x2:xConjoint, y2:y }));
+        } else {
+          const yDecale = y + VG.HAUTEUR_BOITE * 0.75;
+          const d = `M ${xAncre} ${y} L ${xAncre} ${yDecale} L ${xConjoint} ${yDecale} L ${xConjoint} ${y}`;
+          svg.appendChild(creer('path', { class:'lien-mariage lien-mariage-decale', d, fill:'none' }));
+        }
+      });
+    }
+  });
+
+  // 3) Boîtes personnes
+  unionsPlacees.forEach(u => {
+    u.membres.forEach(m => {
+      const p = PERSONNES.get(m);
+      const cx = u.centreMembre[m];
+      const x = cx - VG.LARGEUR_PERSONNE / 2;
+      const { top: y, hauteur: h } = bordsBoiteDe(u, m);
+      const centreY = y + h / 2;
+      const groupe = document.createElementNS(ns, 'g');
+      groupe.setAttribute('class', 'noeud-clic');
+      groupe.addEventListener('click', () => centrerSurPersonne(cx, centreY));
+      if(!p){
+        groupe.appendChild(creer('rect', { class:'noeud-boite orpheline', x, y, width:VG.LARGEUR_PERSONNE, height:h, rx:5 }));
+        const t = creer('text', { class:'noeud-nom', x: cx, y: centreY + 4, 'text-anchor':'middle' });
+        t.textContent = '⚠️ id inconnu';
+        groupe.appendChild(t);
+        svg.appendChild(groupe);
+        return;
+      }
+      const classeStatutEpouse = p.statut_epouse === 'grande_epouse_royale' ? ' grande-epouse'
+        : p.statut_epouse === 'epouse_royale' ? ' epouse-royale' : '';
+      groupe.appendChild(creer('rect', { class:'noeud-boite' + (p.role === 'roi' ? ' roi' : '') + classeStatutEpouse, x, y, width:VG.LARGEUR_PERSONNE, height:h, rx:5 }));
+      const regneTxt = [p.regne_debut, p.regne_fin].filter(Boolean).join(' – ');
+      // Un roi (boîte 2x plus haute) garde son nom et son règne centrés
+      // verticalement dans tout l'espace disponible, pas collés en haut
+      // comme sur une boîte normale.
+      const yNom = h > VG.HAUTEUR_BOITE ? centreY - 6 : y + 18;
+      const yDate = h > VG.HAUTEUR_BOITE ? centreY + 14 : y + 34;
+      const nom = creer('text', {
+        class: 'noeud-nom ' + (p.sexe === 'Femme' ? 'femme' : 'homme') + (p.role === 'roi' ? ' roi' : ''),
+        x: cx, y: yNom, 'text-anchor':'middle'
+      });
+      nom.textContent = nomDe(m);
+      groupe.appendChild(nom);
+      if(regneTxt){
+        const date = creer('text', { class:'noeud-date', x: cx, y: yDate, 'text-anchor':'middle' });
+        date.textContent = regneTxt;
+        groupe.appendChild(date);
+      }
+      svg.appendChild(groupe);
+    });
+  });
+}
+
+// ============================================================
+// Gestion de plusieurs arbres (liste mémorisée dans ce navigateur,
+// partagée avec l'application d'encodage et la vue 3D)
+// ============================================================
+function getArbres() {
+  try { return JSON.parse(localStorage.getItem(LS_ARBRES_KEY)) || []; }
+  catch (e) { return []; }
+}
+function saveArbres(liste) {
+  localStorage.setItem(LS_ARBRES_KEY, JSON.stringify(liste));
+}
+function migrerAncienneConnexionSiBesoin() {
+  const arbres = getArbres();
+  const ancienUrl = localStorage.getItem(LS_URL_KEY);
+  const ancienneKey = localStorage.getItem(LS_ANON_KEY);
+  if (ancienUrl && ancienneKey && !arbres.some(a => a.url === ancienUrl)) {
+    const id = 'arbre-' + Date.now();
+    arbres.push({ id, nom: 'Mon arbre', url: ancienUrl, key: ancienneKey });
+    saveArbres(arbres);
+    localStorage.setItem(LS_ACTIF_KEY, id);
+  }
+}
+function upsertArbre(url, key, nomSouhaite) {
+  const arbres = getArbres();
+  let entry = arbres.find(a => a.url === url);
+  if (entry) {
+    entry.key = key;
+    if (nomSouhaite) entry.nom = nomSouhaite;
+  } else {
+    entry = { id: 'arbre-' + Date.now(), nom: nomSouhaite || 'Arbre sans nom', url, key };
+    arbres.push(entry);
+  }
+  saveArbres(arbres);
+  localStorage.setItem(LS_ACTIF_KEY, entry.id);
+  return entry;
+}
+function arbreActif() {
+  const id = localStorage.getItem(LS_ACTIF_KEY);
+  return getArbres().find(a => a.id === id) || null;
+}
+async function selectionnerArbre(id) {
+  const entry = getArbres().find(a => a.id === id);
+  if (!entry) return;
+  client = supabase.createClient(entry.url, entry.key);
+  localStorage.setItem(LS_ACTIF_KEY, id);
+  closeArbres();
+  await chargerDonnees();
+}
+window.selectionnerArbre = selectionnerArbre;
+function renommerArbre(id) {
+  const arbres = getArbres();
+  const entry = arbres.find(a => a.id === id);
+  if (!entry) return;
+  const nouveauNom = prompt('Nouveau nom pour cet arbre :', entry.nom);
+  if (!nouveauNom || !nouveauNom.trim()) return;
+  entry.nom = nouveauNom.trim();
+  saveArbres(arbres);
+  renderArbresList();
+}
+window.renommerArbre = renommerArbre;
+function supprimerArbreMemorise(id) {
+  const arbres = getArbres();
+  const entry = arbres.find(a => a.id === id);
+  if (!entry) return;
+  if (!confirm('Retirer "' + entry.nom + '" de la liste mémorisée ? (Vos données restent intactes sur Supabase — ceci n\'efface que le raccourci dans ce navigateur.)')) return;
+  const nouvelleListe = arbres.filter(a => a.id !== id);
+  saveArbres(nouvelleListe);
+  if (localStorage.getItem(LS_ACTIF_KEY) === id) {
+    localStorage.removeItem(LS_ACTIF_KEY);
+  }
+  renderArbresList();
+}
+window.supprimerArbreMemorise = supprimerArbreMemorise;
+function openArbres() {
+  renderArbresList();
+  document.getElementById('arbres-overlay').classList.remove('hidden');
+}
+window.openArbres = openArbres;
+function closeArbres() {
+  document.getElementById('arbres-overlay').classList.add('hidden');
+}
+window.closeArbres = closeArbres;
+function renderArbresList() {
+  const arbres = getArbres();
+  const activeId = localStorage.getItem(LS_ACTIF_KEY);
+  const container = document.getElementById('arbres-list');
+  if (!arbres.length) {
+    container.innerHTML = '<p class="hint-text">Aucun arbre mémorisé pour l\'instant. Connectez-vous à un projet Supabase (« ⚙ Changer de connexion ») pour qu\'il apparaisse ici.</p>';
+    return;
+  }
+  container.innerHTML = arbres.map(a => `
+    <div class="arbre-item${a.id === activeId ? ' actif' : ''}">
+      <div class="arbre-info">
+        <strong>${a.nom}</strong>${a.id === activeId ? ' <span class="tag-actif">actif</span>' : ''}
+        <div class="arbre-url">${a.url}</div>
+      </div>
+      <div class="arbre-actions">
+        ${a.id === activeId ? '' : '<button class="btn-cfg small" onclick="selectionnerArbre(\'' + a.id + '\')">Utiliser</button>'}
+        <button class="btn-cfg small" onclick="renommerArbre('${a.id}')">Renommer</button>
+        <button class="btn-cfg small" onclick="supprimerArbreMemorise('${a.id}')">Retirer</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openConfig(prefill) {
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  }
+  document.getElementById('config-overlay').classList.remove('hidden');
+  const actif = arbreActif();
+  if (prefill && actif) {
+    document.getElementById('cfg-url').value = actif.url;
+    document.getElementById('cfg-key').value = actif.key;
+  } else {
+    let brouillon = null;
+    try { brouillon = JSON.parse(localStorage.getItem(LS_DRAFT_KEY)); } catch (e) {}
+    document.getElementById('cfg-url').value = (brouillon && brouillon.url) || '';
+    document.getElementById('cfg-key').value = (brouillon && brouillon.key) || '';
+  }
+  document.getElementById('config-status').textContent = '';
+}
+window.openConfig = openConfig;
+function saveConfigDraft() {
+  localStorage.setItem(LS_DRAFT_KEY, JSON.stringify({
+    url: document.getElementById('cfg-url').value,
+    key: document.getElementById('cfg-key').value
+  }));
+}
+window.saveConfigDraft = saveConfigDraft;
+function closeConfig() {
+  document.getElementById('config-overlay').classList.add('hidden');
+}
+window.closeConfig = closeConfig;
+function openAide() {
+  document.getElementById('aide-overlay').classList.remove('hidden');
+}
+window.openAide = openAide;
+function closeAide() {
+  document.getElementById('aide-overlay').classList.add('hidden');
+}
+window.closeAide = closeAide;
+function copySqlScript() {
+  const text = document.getElementById('sql-script').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const el = document.getElementById('aide-copy-status');
+    el.textContent = 'Script copié dans le presse-papiers !';
+    el.className = 'status ok';
+    setTimeout(() => { el.textContent = ''; }, 3000);
+  }).catch(() => {
+    const el = document.getElementById('aide-copy-status');
+    el.textContent = 'Copie impossible — sélectionnez le texte manuellement.';
+    el.className = 'status error';
+  });
+}
+window.copySqlScript = copySqlScript;
+
+async function saveConfig() {
+  let url = document.getElementById('cfg-url').value.trim();
+  url = url.replace(/\/rest\/v1\/?$/i, '').replace(/\/+$/, '');
+  document.getElementById('cfg-url').value = url;
+  const key = document.getElementById('cfg-key').value.trim();
+  const statusEl = document.getElementById('config-status');
+  if (!url || !key) {
+    statusEl.textContent = 'Merci de remplir les deux champs.';
+    statusEl.className = 'status error';
+    return;
+  }
+  statusEl.textContent = 'Vérification de la connexion...';
+  statusEl.className = 'status';
+  let testClient;
+  try {
+    testClient = supabase.createClient(url, key);
+  } catch (e) {
+    statusEl.textContent = 'URL invalide.';
+    statusEl.className = 'status error';
+    return;
+  }
+  const { error } = await testClient.from(CONFIG.table_personnes).select('id').limit(1);
+  if (error) {
+    statusEl.textContent = 'Connexion impossible : ' + error.message + ' (vérifiez l\'URL, la clé, et que les tables ont bien été créées — voir le mode d\'emploi).';
+    statusEl.className = 'status error';
+    return;
+  }
+  const dejaConnu = getArbres().some(a => a.url === url);
+  let nom = null;
+  if (!dejaConnu) {
+    nom = prompt('Comment voulez-vous nommer cet arbre ? (ex : « Famille Laurent »)', 'Mon arbre');
+    if (nom === null) return;
+  }
+  upsertArbre(url, key, nom);
+  localStorage.removeItem(LS_DRAFT_KEY);
+  client = testClient;
+  statusEl.textContent = 'Connecté !';
+  statusEl.className = 'status ok';
+  setTimeout(() => {
+    closeConfig();
+    chargerDonnees();
+  }, 500);
+}
+window.saveConfig = saveConfig;
+window.imprimerVueActive = imprimerVueActive;
+
+function initConnection() {
+  migrerAncienneConnexionSiBesoin();
+  const actif = arbreActif();
+  if (actif) {
+    client = supabase.createClient(actif.url, actif.key);
+    chargerDonnees();
+  } else {
+    openConfig(false);
+  }
+}
+
+// ============================================================
+// Déplacement de la vue avec Ctrl+clic gauche+glisser (comme la vue 3D)
+// ============================================================
+(function initPanCtrlDrag(){
+  const zone = document.getElementById('zoneCanevas');
+  let panActif = false;
+  let depart = { x: 0, y: 0, scrollLeft: 0, scrollTop: 0 };
+
+  zone.addEventListener('mousedown', (e) => {
+    if (!e.ctrlKey || e.button !== 0) return;
+    panActif = true;
+    depart = { x: e.clientX, y: e.clientY, scrollLeft: zone.scrollLeft, scrollTop: zone.scrollTop };
+    zone.classList.add('pan-en-cours');
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!panActif) return;
+    zone.scrollLeft = depart.scrollLeft - (e.clientX - depart.x);
+    zone.scrollTop = depart.scrollTop - (e.clientY - depart.y);
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (!panActif) return;
+    panActif = false;
+    zone.classList.remove('pan-en-cours');
+  });
+
+  zone.addEventListener('mouseenter', () => zone.classList.add('pan-actif'));
+  zone.addEventListener('mouseleave', () => zone.classList.remove('pan-actif', 'pan-en-cours'));
+})();
+
+initConnection();
+</script>
+</body>
+</html>
