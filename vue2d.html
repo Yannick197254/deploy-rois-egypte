@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.13</span>
+  <span class="badge-version">v2.14</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1428,23 +1428,23 @@ function construireVueGraphique(){
   // Un lien (normal OU pont) qui croiserait un lien déjà posé — dans un
   // sens (son horizontal traverse un vertical existant) comme dans l'autre
   // (son vertical traverse un horizontal existant, cas d'un lien presque
-  // vertical qui coupe la voie d'un autre déjà en place) — n'est jamais
-  // simplement superposé : il est basculé en pont routé par la marge. Cette
-  // vérification s'applique à TOUS les connecteurs, pas seulement à ceux
-  // structurellement détectés comme "pont" (remariage classique) — une
-  // union fusionnée à 3+ membres (roi + plusieurs épouses) où chaque
-  // membre a ses propres parents ailleurs n'est pas détectée par ce
-  // mécanisme structurel, mais peut tout autant croiser un autre lien.
+  // vertical qui coupe la voie d'un autre déjà en place) — bascule en
+  // pont routé par la marge. Un simple horizontal qui traverse un
+  // vertical déjà posé, en revanche, N'EST PAS bloquant : le saut en arc
+  // (segmentAvecSauts) le gère très proprement sur place, sans avoir
+  // besoin d'un détour par la marge. Cette vérification s'applique à
+  // TOUS les connecteurs, pas seulement à ceux structurellement détectés
+  // comme "pont" (remariage classique) — une union fusionnée à 3+
+  // membres (roi + plusieurs épouses) où chaque membre a ses propres
+  // parents ailleurs n'est pas détectée par ce mécanisme structurel,
+  // mais peut tout autant croiser un autre lien.
   const croiseQuelqueChose = (x1, y1, x2, y2, laneY, gap) => {
-    const xMin = Math.min(x1, x2), xMax = Math.max(x1, x2);
-    const croiseVertical = (segmentsVerticauxParCouloir.get(gap) || [])
-      .some(s => s.yFrom <= laneY && laneY <= s.yTo && s.x > xMin + 8 && s.x < xMax - 8);
     const verticalCroiseHorizontal = (xC, yA, yB) => {
       const yMin = Math.min(yA, yB), yMax = Math.max(yA, yB);
       return (segmentsHorizontauxParCouloir.get(gap) || [])
         .some(h => h.xFrom <= xC && xC <= h.xTo && h.y > yMin + 4 && h.y < yMax - 4);
     };
-    return croiseVertical || verticalCroiseHorizontal(x1, y1, laneY) || verticalCroiseHorizontal(x2, laneY, y2);
+    return verticalCroiseHorizontal(x1, y1, laneY) || verticalCroiseHorizontal(x2, laneY, y2);
   };
 
   // Séparation par portée : au-delà d'1 génération d'écart, toujours routé
@@ -1526,14 +1526,9 @@ function construireVueGraphique(){
   svg.setAttribute('width', largeurTotale);
   svg.setAttribute('height', hauteurTotale);
 
-  traitesLocalement.forEach(({x1,y1,x2,y2,gapDebut,laneY,incertain,estPont,estPontStructurel}) => {
+  traitesLocalement.forEach(({x1,y1,x2,y2,gapDebut,laneY,incertain,estPontStructurel}) => {
     const classes = 'lien-filiation' + (estPontStructurel ? ' lien-pont-profond' : '') + (incertain ? ' lien-incertain' : '');
-    let d;
-    if (estPont) {
-      d = `M ${x1} ${y1} L ${x1} ${laneY}` + segmentAvecSauts(x1, x2, laneY, gapDebut) + ` L ${x2} ${y2}`;
-    } else {
-      d = `M ${x1} ${y1} L ${x1} ${laneY} L ${x2} ${laneY} L ${x2} ${y2}`;
-    }
+    const d = `M ${x1} ${y1} L ${x1} ${laneY}` + segmentAvecSauts(x1, x2, laneY, gapDebut) + ` L ${x2} ${y2}`;
     svg.appendChild(creer('path', { class: classes, d }));
   });
 
