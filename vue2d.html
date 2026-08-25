@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.17</span>
+  <span class="badge-version">v2.18</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1508,16 +1508,20 @@ function construireVueGraphique(){
 
     // On essaie d'abord la hauteur par défaut. Si elle chevauche un autre
     // tronc déjà posé (2 fratries indépendantes tombant côte à côte à la
-    // même hauteur — cas jamais vu avant celui d'Hatchepsout/Néféroubity
-    // face à Amenmès/Wadjmès), on tente un léger décalage vers le bas —
-    // mais seulement si ce décalage ne crée pas, à son tour, un vrai
-    // croisement bloquant ailleurs (vérifié avant de l'adopter, pas
-    // juste résoudre le conflit sous les yeux sans regarder les
-    // conséquences).
+    // même hauteur), on tente plusieurs paliers de repli — vers le bas
+    // d'abord, puis vers le haut si aucun palier vers le bas ne convient
+    // — chacun vérifié avant adoption pour ne pas créer un nouveau
+    // problème ailleurs. Plusieurs essais plutôt qu'un seul, pour ne pas
+    // retomber sur un vrai détour par la marge dès que le premier palier
+    // testé ne suffit pas.
     let resultat = testerHauteur(fractionParDefaut);
     if (!resultat.bloque && !resultat.propre) {
-      const decale = testerHauteur(Math.min(fractionParDefaut + 0.15, fractionMax));
-      if (decale.propre) resultat = decale;
+      const decalagesEssayes = [0.15, 0.30, -0.15, 0.08, -0.08];
+      for (const decalage of decalagesEssayes) {
+        const fractionEssai = Math.max(0.12, Math.min(fractionParDefaut + decalage, fractionMax));
+        const essai = testerHauteur(fractionEssai);
+        if (essai.propre) { resultat = essai; break; }
+      }
     }
 
     if (resultat.bloque || !resultat.propre) {
