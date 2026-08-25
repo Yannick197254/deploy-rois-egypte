@@ -528,7 +528,7 @@
 <div class="top-bar">
 <header>
   <h1>𓂀 Rois d'Égypte antique</h1>
-  <p>Interface d'encodage · v2.00 &nbsp;·&nbsp; <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button> &nbsp;·&nbsp; <button class="link-btn" onclick="openConfig()">⚙ Changer de connexion</button> &nbsp;·&nbsp; <button class="link-btn" onclick="exportToExcel()">💾 Sauvegarder en Excel</button> &nbsp;·&nbsp; <button class="link-btn" id="btn-import" onclick="document.getElementById('import-file').click()">📥 Importer depuis Excel</button> &nbsp;·&nbsp; <a class="link-btn" href="vue3d.html" style="text-decoration:underline;">🌳 Vue 3D</a> &nbsp;·&nbsp; <a class="link-btn" href="vue2d.html" style="text-decoration:underline;">📐 Vue 2D</a></p>
+  <p>Interface d'encodage · v2.01 &nbsp;·&nbsp; <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button> &nbsp;·&nbsp; <button class="link-btn" onclick="openConfig()">⚙ Changer de connexion</button> &nbsp;·&nbsp; <button class="link-btn" onclick="exportToExcel()">💾 Sauvegarder en Excel</button> &nbsp;·&nbsp; <button class="link-btn" id="btn-import" onclick="document.getElementById('import-file').click()">📥 Importer depuis Excel</button> &nbsp;·&nbsp; <a class="link-btn" href="vue3d.html" style="text-decoration:underline;">🌳 Vue 3D</a> &nbsp;·&nbsp; <a class="link-btn" href="vue2d.html" style="text-decoration:underline;">📐 Vue 2D</a></p>
   <input type="file" id="import-file" accept=".xlsx" style="display:none;" onchange="importFromExcel(this.files[0])">
 </header>
 
@@ -722,7 +722,11 @@
       <h2>Liste des mariages</h2>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Personne 1</th><th>Personne 2</th><th>Ordre</th><th>Dates</th><th></th></tr></thead>
+          <thead><tr>
+            <th class="th-sort" onclick="trierMariagesPar('p1')">Personne 1<span class="sort-arrow" id="sort-arrow-m-p1"></span></th>
+            <th class="th-sort" onclick="trierMariagesPar('p2')">Personne 2<span class="sort-arrow" id="sort-arrow-m-p2"></span></th>
+            <th>Ordre</th><th>Dates</th><th></th>
+          </tr></thead>
           <tbody id="mariages-table"><tr><td colspan="5" class="empty">Chargement...</td></tr></tbody>
         </table>
       </div>
@@ -777,7 +781,12 @@
       <h2>Liste des filiations</h2>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Enfant</th><th>Père</th><th>Mère</th><th>Incertitude</th><th></th></tr></thead>
+          <thead><tr>
+            <th class="th-sort" onclick="trierFiliationsPar('enfant')">Enfant<span class="sort-arrow" id="sort-arrow-f-enfant"></span></th>
+            <th class="th-sort" onclick="trierFiliationsPar('pere')">Père<span class="sort-arrow" id="sort-arrow-f-pere"></span></th>
+            <th class="th-sort" onclick="trierFiliationsPar('mere')">Mère<span class="sort-arrow" id="sort-arrow-f-mere"></span></th>
+            <th>Incertitude</th><th></th>
+          </tr></thead>
           <tbody id="filiations-table"><tr><td colspan="5" class="empty">Chargement...</td></tr></tbody>
         </table>
       </div>
@@ -1654,17 +1663,52 @@ function editMariage(m) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+let mariagesCache = [];
+let mariagesTri = { champ: null, direction: 'asc' };
+
+function trierMariagesPar(champ) {
+  if (mariagesTri.champ === champ) {
+    mariagesTri.direction = mariagesTri.direction === 'asc' ? 'desc' : 'asc';
+  } else {
+    mariagesTri = { champ, direction: 'asc' };
+  }
+  renderMariagesTable();
+}
+
+function majFlechesTriMariages() {
+  ['p1', 'p2'].forEach(champ => {
+    const el = document.getElementById('sort-arrow-m-' + champ);
+    if (!el) return;
+    el.textContent = mariagesTri.champ === champ ? (mariagesTri.direction === 'asc' ? '▲' : '▼') : '';
+  });
+}
+
 async function loadMariages() {
   const { data, error } = await sb.from('mariages').select('*');
   const tbody = document.getElementById('mariages-table');
   if (error) { tbody.innerHTML = '<tr><td colspan="5" class="empty">Erreur : ' + error.message + '</td></tr>'; return; }
-  if (!data || data.length === 0) {
+  mariagesCache = data || [];
+  renderMariagesTable();
+}
+
+function renderMariagesTable() {
+  const tbody = document.getElementById('mariages-table');
+  if (mariagesCache.length === 0) {
     tbody.innerHTML = '<tr><td colspan="5" class="empty">Aucun mariage encodé pour l\'instant.</td></tr>';
     return;
   }
   const persDe = id => personnesCache.find(p => p.id === id);
   const nomDe = id => nomComplet(persDe(id));
-  tbody.innerHTML = data.map(m => {
+
+  let liste = mariagesCache.slice();
+  if (mariagesTri.champ) {
+    const idChamp = mariagesTri.champ === 'p1' ? 'personne_1_id' : 'personne_2_id';
+    const sens = mariagesTri.direction === 'asc' ? 1 : -1;
+    liste.sort((a, b) => sens * nomDe(a[idChamp]).localeCompare(nomDe(b[idChamp]), 'fr', { sensitivity: 'base' }));
+  }
+  majFlechesTriMariages();
+
+  tbody.innerHTML = liste.map(m => {
     const dates = [m.date_debut, m.date_fin].filter(Boolean).join(' – ');
     return '<tr>' +
       '<td>' + escapeHtml(nomDe(m.personne_1_id)) + '</td>' +
@@ -1727,16 +1771,51 @@ function editFiliation(f) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+let filiationsCache = [];
+let filiationsTri = { champ: null, direction: 'asc' };
+
+function trierFiliationsPar(champ) {
+  if (filiationsTri.champ === champ) {
+    filiationsTri.direction = filiationsTri.direction === 'asc' ? 'desc' : 'asc';
+  } else {
+    filiationsTri = { champ, direction: 'asc' };
+  }
+  renderFiliationsTable();
+}
+
+function majFlechesTriFiliations() {
+  ['enfant', 'pere', 'mere'].forEach(champ => {
+    const el = document.getElementById('sort-arrow-f-' + champ);
+    if (!el) return;
+    el.textContent = filiationsTri.champ === champ ? (filiationsTri.direction === 'asc' ? '▲' : '▼') : '';
+  });
+}
+
 async function loadFiliations() {
   const { data, error } = await sb.from('filiations').select('*');
   const tbody = document.getElementById('filiations-table');
   if (error) { tbody.innerHTML = '<tr><td colspan="5" class="empty">Erreur : ' + error.message + '</td></tr>'; return; }
-  if (!data || data.length === 0) {
+  filiationsCache = data || [];
+  renderFiliationsTable();
+}
+
+function renderFiliationsTable() {
+  const tbody = document.getElementById('filiations-table');
+  if (filiationsCache.length === 0) {
     tbody.innerHTML = '<tr><td colspan="5" class="empty">Aucune filiation encodée pour l\'instant.</td></tr>';
     return;
   }
   const nomDe = id => { if (!id) return '?'; const p = personnesCache.find(p => p.id === id); return p ? nomComplet(p) : '?'; };
-  tbody.innerHTML = data.map(f => {
+
+  let liste = filiationsCache.slice();
+  if (filiationsTri.champ) {
+    const idChamp = filiationsTri.champ === 'enfant' ? 'enfant_id' : filiationsTri.champ === 'pere' ? 'pere_id' : 'mere_id';
+    const sens = filiationsTri.direction === 'asc' ? 1 : -1;
+    liste.sort((a, b) => sens * nomDe(a[idChamp]).localeCompare(nomDe(b[idChamp]), 'fr', { sensitivity: 'base' }));
+  }
+  majFlechesTriFiliations();
+
+  tbody.innerHTML = liste.map(f => {
     const incertBits = [];
     if (f.pere_incertain) incertBits.push('père');
     if (f.mere_incertaine) incertBits.push('mère');
