@@ -61,7 +61,7 @@
   #vueGraphique .noeud-clic:hover .noeud-boite{ stroke:var(--bleu); stroke-width:2; }
   #zoneCanevas.pan-actif{ cursor:grab; }
   #zoneCanevas.pan-en-cours{ cursor:grabbing; }
-  #vueGraphique .lien-mariage{ stroke:#c0392b; stroke-width:4; }
+  #vueGraphique .lien-mariage{ stroke:#c0392b; stroke-width:8; }
   #vueGraphique .lien-mariage-decale{ stroke-dasharray:4,3; }
   #vueGraphique .lien-filiation{ stroke:#2e7d32; stroke-width:1.6; fill:none; }
   #vueGraphique .lien-filiation.lien-pont-profond{ stroke:#b8860b; }
@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.32</span>
+  <span class="badge-version">v2.33</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -393,7 +393,7 @@ async function chargerDonnees(){
     if(rFiliations.error) throw rFiliations.error;
 
     PERSONNES = new Map((rPersonnes.data || []).map(p => [p.id, p]));
-    MARIAGES = (rMariages.data || []).map(m => ({ id:m.id, p1:m.personne_1_id, p2:m.personne_2_id, ordre:m.ordre }));
+    MARIAGES = (rMariages.data || []).map(m => ({ id:m.id, p1:m.personne_1_id, p2:m.personne_2_id, ordre:m.ordre, incertain: !!m.mariage_incertain }));
     FILIATIONS = (rFiliations.data || []).map(f => ({ id:f.id, enfant:f.enfant_id, pere:f.pere_id, mere:f.mere_id, pereIncertain: !!f.pere_incertain, mereIncertaine: !!f.mere_incertaine }));
 
     // ============================================================
@@ -800,7 +800,7 @@ const VG = {
 // en haut) — elle déborde donc autant vers le haut que vers le bas.
 function hauteurBoiteDe(pid){
   const p = PERSONNES.get(pid);
-  return (p && p.role === 'roi') ? VG.HAUTEUR_BOITE * 2 : VG.HAUTEUR_BOITE;
+  return (p && p.role === 'roi') ? VG.HAUTEUR_BOITE * 2 * (4/3) : VG.HAUTEUR_BOITE;
 }
 function bordsBoiteDe(u, pid){
   const centre = u.y + VG.HAUTEUR_BOITE / 2;
@@ -1601,12 +1601,16 @@ function construireVueGraphique(){
       u.membres.forEach((pid, idx) => {
         if(pid === u.anchor) return;
         const xConjoint = u.centreMembre[pid];
+        const mariageCorrespondant = MARIAGES.find(m =>
+          (m.p1 === u.anchor && m.p2 === pid) || (m.p1 === pid && m.p2 === u.anchor)
+        );
+        const incertain = !!(mariageCorrespondant && mariageCorrespondant.incertain);
         if(Math.abs(idx - idxAncre) === 1){
-          svg.appendChild(creer('line', { class:'lien-mariage', x1:xAncre, y1:y, x2:xConjoint, y2:y }));
+          svg.appendChild(creer('line', { class:'lien-mariage' + (incertain ? ' lien-mariage-decale' : ''), x1:xAncre, y1:y, x2:xConjoint, y2:y }));
         } else {
           const yDecale = y + VG.HAUTEUR_BOITE * 0.75;
           const d = `M ${xAncre} ${y} L ${xAncre} ${yDecale} L ${xConjoint} ${yDecale} L ${xConjoint} ${y}`;
-          svg.appendChild(creer('path', { class:'lien-mariage lien-mariage-decale', d, fill:'none' }));
+          svg.appendChild(creer('path', { class:'lien-mariage' + (incertain ? ' lien-mariage-decale' : ''), d, fill:'none' }));
         }
       });
     }
