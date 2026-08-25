@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.25</span>
+  <span class="badge-version">v2.26</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1408,28 +1408,31 @@ function construireVueGraphique(){
     return largeurMaxEntre(genA, genB) + CANAL_MARGE; // filet de sécurité, ne devrait jamais servir
   };
 
-  // Petit utilitaire : segment horizontal à hauteur "laneY" dans le couloir
-  // "gap", avec saut en arc à chaque croisement d'un lien déjà posé. Seul
-  // ce sens (horizontal qui saute par-dessus un vertical) est utilisé —
-  // les segments verticaux traversent tout droit, sans tenter leur propre
-  // saut : puisque tous les segments sont enregistrés avant que quoi que
-  // ce soit ne soit dessiné, ce saut horizontal contourne correctement
-  // n'importe quel vertical déjà en place, peu importe l'ordre de
-  // traitement d'origine — pas besoin d'un second mécanisme côté vertical,
-  // qui ne faisait que doubler le contournement au même endroit.
-  const segmentAvecSauts = (xDepart, xArrivee, laneY, gap, clefFratrie) => {
-    const sens = xArrivee >= xDepart ? 1 : -1;
-    const xMin = Math.min(xDepart, xArrivee), xMax = Math.max(xDepart, xArrivee);
-    const croisements = (segmentsVerticauxParCouloir.get(gap) || [])
-      .filter(s => s.yFrom <= laneY && laneY <= s.yTo && s.x > xMin + 8 && s.x < xMax - 8 && s.clefFratrie !== clefFratrie)
-      .map(s => s.x)
+  // Segment horizontal à hauteur "laneY" : toujours parfaitement droit,
+  // aucun arc. C'est le VERTICAL qui laisse un petit vide à l'endroit du
+  // croisement (segmentVerticalAvecTrous ci-dessous) — c'est ce sens-là
+  // qui donne un vrai rendu "passe par-dessus" (le trait dessous
+  // s'interrompt visiblement), plutôt qu'un arc qui se superpose au trait
+  // qui continue tout droit en dessous.
+  const segmentAvecSauts = (xDepart, xArrivee, laneY) => ` L ${xArrivee} ${laneY}`;
+
+  // Segment vertical à x fixe, avec un petit VIDE (pas un arc) à chaque
+  // croisement d'un horizontal déjà posé — le trait s'interrompt juste
+  // avant, reprend juste après, laissant l'horizontal (parfaitement
+  // droit) visuellement "passer par-dessus".
+  const segmentVerticalAvecTrous = (x, yDepart, yArrivee, gap, clefFratrie) => {
+    const sens = yArrivee >= yDepart ? 1 : -1;
+    const yMin = Math.min(yDepart, yArrivee), yMax = Math.max(yDepart, yArrivee);
+    const croisements = (segmentsHorizontauxParCouloir.get(gap) || [])
+      .filter(h => h.xFrom <= x && x <= h.xTo && h.y > yMin + 4 && h.y < yMax - 4 && h.clefFratrie !== clefFratrie)
+      .map(h => h.y)
       .sort((a,b) => sens > 0 ? a - b : b - a);
     let frag = '';
-    croisements.forEach(xc => {
-      const avant = xc - sens * 6, apres = xc + sens * 6;
-      frag += ` L ${avant} ${laneY} A 6 6 0 0 ${sens > 0 ? 1 : 0} ${apres} ${laneY}`;
+    croisements.forEach(yc => {
+      const avant = yc - sens * 5, apres = yc + sens * 5;
+      frag += ` L ${x} ${avant} M ${x} ${apres}`;
     });
-    frag += ` L ${xArrivee} ${laneY}`;
+    frag += ` L ${x} ${yArrivee}`;
     return frag;
   };
 
@@ -1548,9 +1551,9 @@ function construireVueGraphique(){
 
   traitesLocalement.forEach(({x1,y1,x2,y2,gapDebut,laneY,incertain,estPontStructurel,clefFratrie}) => {
     const classes = 'lien-filiation' + (estPontStructurel ? ' lien-pont-profond' : '') + (incertain ? ' lien-incertain' : '');
-    const d = `M ${x1} ${y1} L ${x1} ${laneY}`
-      + segmentAvecSauts(x1, x2, laneY, gapDebut, clefFratrie)
-      + ` L ${x2} ${y2}`;
+    const d = `M ${x1} ${y1}` + segmentVerticalAvecTrous(x1, y1, laneY, gapDebut, clefFratrie)
+      + segmentAvecSauts(x1, x2, laneY)
+      + segmentVerticalAvecTrous(x2, laneY, y2, gapDebut, clefFratrie);
     svg.appendChild(creer('path', { class: classes, d }));
   });
 
@@ -1558,22 +1561,21 @@ function construireVueGraphique(){
   // ci-dessus car ils croisaient un autre lien) : sortent par la marge de
   // droite, descendent tout du long dans le canal réservé (zéro
   // croisement possible sur ce tronçon, car c'est un espace vide), puis
-  // reviennent vers leur cible — avec sauts uniquement sur les 2 courts
-  // trajets d'entrée/sortie, là où un croisement reste possible. Toujours
-  // affiché en pointillé (style "pont"), même si le lien n'était pas
-  // structurellement un pont à l'origine — la promotion elle-même
-  // signale visuellement qu'un détour a été nécessaire.
+  // reviennent vers leur cible. Toujours affiché en pointillé (style
+  // "pont"), même si le lien n'était pas structurellement un pont à
+  // l'origine — la promotion elle-même signale visuellement qu'un
+  // détour a été nécessaire.
   pontsParMarge.forEach(({x1,y1,x2,y2,gapDebut,gapFin,incertain,clefFratrie}, index) => {
     const gapArrivee = gapFin - 1;
     const canalX = canalXParPont[index];
     const laneY1 = hautCouloir(gapDebut) + (basCouloir(gapDebut) - hautCouloir(gapDebut)) * FRACTION_VOIE_PONT;
     const laneY2 = hautCouloir(gapArrivee) + (basCouloir(gapArrivee) - hautCouloir(gapArrivee)) * FRACTION_VOIE_PONT;
 
-    let d = `M ${x1} ${y1} L ${x1} ${laneY1}`;
-    d += segmentAvecSauts(x1, canalX, laneY1, gapDebut, clefFratrie);
+    let d = `M ${x1} ${y1}` + segmentVerticalAvecTrous(x1, y1, laneY1, gapDebut, clefFratrie);
+    d += segmentAvecSauts(x1, canalX, laneY1);
     d += ` L ${canalX} ${laneY2}`; // descente verticale dans le canal, espace vide vérifié
-    d += segmentAvecSauts(canalX, x2, laneY2, gapArrivee, clefFratrie);
-    d += ` L ${x2} ${y2}`;
+    d += segmentAvecSauts(canalX, x2, laneY2);
+    d += segmentVerticalAvecTrous(x2, laneY2, y2, gapArrivee, clefFratrie);
     svg.appendChild(creer('path', { class:'lien-filiation lien-pont-profond' + (incertain ? ' lien-incertain' : ''), d }));
   });
 
