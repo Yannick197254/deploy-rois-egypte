@@ -528,7 +528,7 @@
 <div class="top-bar">
 <header>
   <h1>𓂀 Rois d'Égypte antique</h1>
-  <p>Interface d'encodage · v2.01 &nbsp;·&nbsp; <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button> &nbsp;·&nbsp; <button class="link-btn" onclick="openConfig()">⚙ Changer de connexion</button> &nbsp;·&nbsp; <button class="link-btn" onclick="exportToExcel()">💾 Sauvegarder en Excel</button> &nbsp;·&nbsp; <button class="link-btn" id="btn-import" onclick="document.getElementById('import-file').click()">📥 Importer depuis Excel</button> &nbsp;·&nbsp; <a class="link-btn" href="vue3d.html" style="text-decoration:underline;">🌳 Vue 3D</a> &nbsp;·&nbsp; <a class="link-btn" href="vue2d.html" style="text-decoration:underline;">📐 Vue 2D</a></p>
+  <p>Interface d'encodage · v2.03 &nbsp;·&nbsp; <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button> &nbsp;·&nbsp; <button class="link-btn" onclick="openConfig()">⚙ Changer de connexion</button> &nbsp;·&nbsp; <button class="link-btn" onclick="exportToExcel()">💾 Sauvegarder en Excel</button> &nbsp;·&nbsp; <button class="link-btn" id="btn-import" onclick="document.getElementById('import-file').click()">📥 Importer depuis Excel</button> &nbsp;·&nbsp; <a class="link-btn" href="vue3d.html" style="text-decoration:underline;">🌳 Vue 3D</a> &nbsp;·&nbsp; <a class="link-btn" href="vue2d.html" style="text-decoration:underline;">📐 Vue 2D</a></p>
   <input type="file" id="import-file" accept=".xlsx" style="display:none;" onchange="importFromExcel(this.files[0])">
 </header>
 
@@ -557,7 +557,7 @@
           <select id="p-role" onchange="majAffichageChampsRole()">
             <option value="roi">Roi / Pharaon</option>
             <option value="femme">Femme</option>
-            <option value="enfant">Enfant</option>
+            <option value="autre">Autre</option>
           </select>
         </div>
         <div class="field">
@@ -571,6 +571,13 @@
         <div class="field">
           <label>Nom translittéré</label>
           <input type="text" id="p-nom_translittere" placeholder="ex : Ra-mesu-sw">
+        </div>
+        <div class="field">
+          <label>Fils aîné</label>
+          <select id="p-fils_aine">
+            <option value="false">Non</option>
+            <option value="true">Oui</option>
+          </select>
         </div>
       </div>
 
@@ -708,6 +715,13 @@
         </div>
         <div class="field"><label>Date début</label><input type="text" id="m-date_debut"></div>
         <div class="field"><label>Date fin</label><input type="text" id="m-date_fin" placeholder="veuvage, divorce..."></div>
+        <div class="field">
+          <label>Mariage incertain</label>
+          <select id="m-mariage_incertain">
+            <option value="false">Non</option>
+            <option value="true">Oui</option>
+          </select>
+        </div>
         <div class="field full"><label>Commentaire</label><textarea id="m-commentaire"></textarea></div>
       </div>
       <p class="hint-text">L'ordre sert à classer les remariages dans le temps pour une même personne (1 = premier mariage, 2 = second...).</p>
@@ -725,9 +739,9 @@
           <thead><tr>
             <th class="th-sort" onclick="trierMariagesPar('p1')">Personne 1<span class="sort-arrow" id="sort-arrow-m-p1"></span></th>
             <th class="th-sort" onclick="trierMariagesPar('p2')">Personne 2<span class="sort-arrow" id="sort-arrow-m-p2"></span></th>
-            <th>Ordre</th><th>Dates</th><th></th>
+            <th>Ordre</th><th>Dates</th><th>Incertitude</th><th></th>
           </tr></thead>
-          <tbody id="mariages-table"><tr><td colspan="5" class="empty">Chargement...</td></tr></tbody>
+          <tbody id="mariages-table"><tr><td colspan="6" class="empty">Chargement...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1215,14 +1229,15 @@ async function exportToExcel() {
     dynastie: p.dynastie, nom_horus: p.nom_horus, nom_nebty: p.nom_nebty, nom_horus_or: p.nom_horus_or,
     nomen: p.nomen, prenomen: p.prenomen, regne_debut: p.regne_debut, regne_fin: p.regne_fin,
     age_acces_trone: p.age_acces_trone, duree_regne: p.duree_regne, ordre_succession: p.ordre_succession,
-    nom_translittere: p.nom_translittere, statut_epouse: p.statut_epouse,
+    nom_translittere: p.nom_translittere, statut_epouse: p.statut_epouse, fils_aine: p.fils_aine,
     champ_texte_1: p.champ_texte_1, champ_texte_2: p.champ_texte_2, champ_texte_3: p.champ_texte_3, champ_texte_4: p.champ_texte_4,
     commentaire: p.commentaire
   }));
 
   const mariagesRows = (mariages || []).map(m => ({
     id: m.id, personne_1_id: m.personne_1_id, personne_2_id: m.personne_2_id,
-    ordre: m.ordre, date_debut: m.date_debut, date_fin: m.date_fin, commentaire: m.commentaire
+    ordre: m.ordre, date_debut: m.date_debut, date_fin: m.date_fin,
+    mariage_incertain: m.mariage_incertain, commentaire: m.commentaire
   }));
 
   const filiationsRows = (filiations || []).map(f => ({
@@ -1297,6 +1312,7 @@ async function importFromExcel(file) {
         age_acces_trone: p.age_acces_trone, duree_regne: p.duree_regne,
         ordre_succession: (p.ordre_succession === '' || p.ordre_succession === undefined) ? null : p.ordre_succession,
         nom_translittere: p.nom_translittere, statut_epouse: p.statut_epouse || null,
+        fils_aine: estVrai(p.fils_aine),
         champ_texte_1: p.champ_texte_1, champ_texte_2: p.champ_texte_2, champ_texte_3: p.champ_texte_3, champ_texte_4: p.champ_texte_4,
         commentaire: p.commentaire,
       }));
@@ -1306,7 +1322,8 @@ async function importFromExcel(file) {
       .map(m => ({
         id: m.id, personne_1_id: m.personne_1_id, personne_2_id: m.personne_2_id,
         ordre: (m.ordre === '' || m.ordre === undefined) ? null : m.ordre,
-        date_debut: m.date_debut, date_fin: m.date_fin, commentaire: m.commentaire,
+        date_debut: m.date_debut, date_fin: m.date_fin,
+        mariage_incertain: estVrai(m.mariage_incertain), commentaire: m.commentaire,
       }));
 
     const filiationsAImporter = brutFiliations
@@ -1374,7 +1391,7 @@ function nomComplet(p) {
   return p.nom_usuel || '?';
 }
 
-const ROLE_LABEL = { roi: 'Roi/Pharaon', femme: 'Femme', enfant: 'Enfant' };
+const ROLE_LABEL = { roi: 'Roi/Pharaon', femme: 'Femme', autre: 'Autre' };
 
 function majAffichageChampsRole() {
   const role = document.getElementById('p-role').value;
@@ -1433,6 +1450,7 @@ function resetPersonneForm() {
     if (el) el.value = '';
   });
   document.getElementById('p-role').value = 'roi';
+  document.getElementById('p-fils_aine').value = 'false';
   majAffichageChampsRole();
 }
 
@@ -1446,6 +1464,7 @@ async function savePersonne() {
     role: document.getElementById('p-role').value,
     sexe: document.getElementById('p-sexe').value || null,
     nom_translittere: document.getElementById('p-nom_translittere').value || null,
+    fils_aine: document.getElementById('p-fils_aine').value === 'true',
     dynastie: document.getElementById('p-dynastie').value || null,
     ordre_succession: document.getElementById('p-ordre_succession').value || null,
     nom_horus: document.getElementById('p-nom_horus').value || null,
@@ -1488,6 +1507,7 @@ function editPersonne(p) {
   document.getElementById('p-role').value = p.role || 'roi';
   document.getElementById('p-sexe').value = p.sexe || '';
   document.getElementById('p-nom_translittere').value = p.nom_translittere || '';
+  document.getElementById('p-fils_aine').value = p.fils_aine ? 'true' : 'false';
   document.getElementById('p-dynastie').value = p.dynastie || '';
   document.getElementById('p-ordre_succession').value = p.ordre_succession ?? '';
   document.getElementById('p-nom_horus').value = p.nom_horus || '';
@@ -1609,6 +1629,7 @@ function resetMariageForm() {
   document.getElementById('m-ordre').value = '';
   document.getElementById('m-date_debut').value = '';
   document.getElementById('m-date_fin').value = '';
+  document.getElementById('m-mariage_incertain').value = 'false';
   document.getElementById('m-commentaire').value = '';
 }
 
@@ -1624,6 +1645,7 @@ async function saveMariage() {
     ordre: document.getElementById('m-ordre').value ? parseInt(document.getElementById('m-ordre').value) : null,
     date_debut: document.getElementById('m-date_debut').value || null,
     date_fin: document.getElementById('m-date_fin').value || null,
+    mariage_incertain: document.getElementById('m-mariage_incertain').value === 'true',
     commentaire: document.getElementById('m-commentaire').value || null,
   };
 
@@ -1659,6 +1681,7 @@ function editMariage(m) {
   document.getElementById('m-ordre').value = m.ordre ?? '';
   document.getElementById('m-date_debut').value = m.date_debut || '';
   document.getElementById('m-date_fin').value = m.date_fin || '';
+  document.getElementById('m-mariage_incertain').value = m.mariage_incertain ? 'true' : 'false';
   document.getElementById('m-commentaire').value = m.commentaire || '';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -1686,7 +1709,7 @@ function majFlechesTriMariages() {
 async function loadMariages() {
   const { data, error } = await sb.from('mariages').select('*');
   const tbody = document.getElementById('mariages-table');
-  if (error) { tbody.innerHTML = '<tr><td colspan="5" class="empty">Erreur : ' + error.message + '</td></tr>'; return; }
+  if (error) { tbody.innerHTML = '<tr><td colspan="6" class="empty">Erreur : ' + error.message + '</td></tr>'; return; }
   mariagesCache = data || [];
   renderMariagesTable();
 }
@@ -1694,7 +1717,7 @@ async function loadMariages() {
 function renderMariagesTable() {
   const tbody = document.getElementById('mariages-table');
   if (mariagesCache.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty">Aucun mariage encodé pour l\'instant.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">Aucun mariage encodé pour l\'instant.</td></tr>';
     return;
   }
   const persDe = id => personnesCache.find(p => p.id === id);
@@ -1715,6 +1738,7 @@ function renderMariagesTable() {
       '<td>' + escapeHtml(nomDe(m.personne_2_id)) + '</td>' +
       '<td>' + (m.ordre ?? '') + '</td>' +
       '<td>' + escapeHtml(dates) + '</td>' +
+      '<td>' + (m.mariage_incertain ? 'Oui' : '—') + '</td>' +
       '<td class="row-actions">' +
         '<button class="btn btn-secondary small" onclick=\'editMariage(' + JSON.stringify(m).replace(/'/g, "&#39;") + ')\'>Modifier</button>' +
         '<button class="btn btn-danger small" onclick="deleteMariage(\'' + m.id + '\')">Supprimer</button>' +
