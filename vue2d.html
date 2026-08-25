@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.31</span>
+  <span class="badge-version">v2.32</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1408,23 +1408,29 @@ function construireVueGraphique(){
     return largeurMaxEntre(genA, genB) + CANAL_MARGE; // filet de sécurité, ne devrait jamais servir
   };
 
+  // Dédoublonnage par position x (arrondie) : les enfants d'une même
+  // fratrie partagent le même trait vers leurs parents, enregistré en
+  // double (une fois par enfant) à la même position x — sans ça, une
+  // fratrie de plusieurs enfants compterait à tort plusieurs croisements
+  // pour un seul vrai trait de parent.
+  const positionsUniques = (xMin, xMax, laneY, gap, clefFratrie) => [...new Set(
+    (segmentsVerticauxParCouloir.get(gap) || [])
+      .filter(s => s.yFrom < laneY && laneY < s.yTo && s.x > xMin + 8 && s.x < xMax - 8 && s.clefFratrie !== clefFratrie)
+      .map(s => Math.round(s.x))
+  )];
+
   // Segment horizontal à hauteur "laneY" : à chaque croisement d'un
-  // vertical déjà posé, une petite bosse visible (montée puis descente)
-  // AVEC un vrai vide pile au sommet. RÈGLE : seul l'horizontal saute —
-  // le vertical, lui, traverse toujours tout droit, sans interruption
-  // (voir plus bas, plus de fonction dédiée pour lui).
+  // vertical déjà posé, un arc SVG pur — RÈGLE : seul l'horizontal
+  // saute, le vertical traverse toujours tout droit, sans interruption.
   const segmentAvecSauts = (xDepart, xArrivee, laneY, gap, clefFratrie) => {
     const sens = xArrivee >= xDepart ? 1 : -1;
     const xMin = Math.min(xDepart, xArrivee), xMax = Math.max(xDepart, xArrivee);
-    const croisements = (segmentsVerticauxParCouloir.get(gap) || [])
-      .filter(s => s.yFrom <= laneY && laneY <= s.yTo && s.x > xMin + 8 && s.x < xMax - 8 && s.clefFratrie !== clefFratrie)
-      .map(s => s.x)
+    const croisements = positionsUniques(xMin, xMax, laneY, gap, clefFratrie)
       .sort((a,b) => sens > 0 ? a - b : b - a);
     let frag = '';
     croisements.forEach(xc => {
-      const avant = xc - sens * 10, apres = xc + sens * 10;
-      const picAvant = xc - sens * 4, picApres = xc + sens * 4;
-      frag += ` L ${avant} ${laneY} L ${picAvant} ${laneY - 9} M ${picApres} ${laneY - 9} L ${apres} ${laneY}`;
+      const avant = xc - sens * 6, apres = xc + sens * 6;
+      frag += ` L ${avant} ${laneY} A 6 6 0 0 ${sens > 0 ? 1 : 0} ${apres} ${laneY}`;
     });
     frag += ` L ${xArrivee} ${laneY}`;
     return frag;
