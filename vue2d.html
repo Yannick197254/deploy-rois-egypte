@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.18</span>
+  <span class="badge-version">v2.19</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1515,16 +1515,19 @@ function construireVueGraphique(){
     // retomber sur un vrai détour par la marge dès que le premier palier
     // testé ne suffit pas.
     let resultat = testerHauteur(fractionParDefaut);
+    console.log('[FRATRIE défaut]', groupe.map(c => c.x2.toFixed(0)).join('+'), 'x1=', c0.x1.toFixed(0), 'bloque=', resultat.bloque, 'propre=', resultat.propre);
     if (!resultat.bloque && !resultat.propre) {
       const decalagesEssayes = [0.15, 0.30, -0.15, 0.08, -0.08];
       for (const decalage of decalagesEssayes) {
         const fractionEssai = Math.max(0.12, Math.min(fractionParDefaut + decalage, fractionMax));
         const essai = testerHauteur(fractionEssai);
+        console.log('  [essai decalage=' + decalage + ']', 'bloque=', essai.bloque, 'propre=', essai.propre);
         if (essai.propre) { resultat = essai; break; }
       }
     }
 
     if (resultat.bloque || !resultat.propre) {
+      console.log('[FRATRIE promue]', groupe.map(c => c.x2.toFixed(0)).join('+'), 'bloque=', resultat.bloque, 'propre=', resultat.propre);
       groupe.forEach(c => aPromouvoir.push(c));
     } else {
       const laneY = resultat.laneY;
