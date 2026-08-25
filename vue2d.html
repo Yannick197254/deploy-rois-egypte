@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.20</span>
+  <span class="badge-version">v2.21</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1425,27 +1425,36 @@ function construireVueGraphique(){
     return frag;
   };
 
-  // Un lien (normal OU pont) qui croiserait un lien déjà posé — dans un
-  // sens (son horizontal traverse un vertical existant) comme dans l'autre
-  // (son vertical traverse un horizontal existant, cas d'un lien presque
-  // vertical qui coupe la voie d'un autre déjà en place) — bascule en
-  // pont routé par la marge. Un simple horizontal qui traverse un
-  // vertical déjà posé, en revanche, N'EST PAS bloquant : le saut en arc
-  // (segmentAvecSauts) le gère très proprement sur place, sans avoir
-  // besoin d'un détour par la marge. Cette vérification s'applique à
-  // TOUS les connecteurs, pas seulement à ceux structurellement détectés
-  // comme "pont" (remariage classique) — une union fusionnée à 3+
-  // membres (roi + plusieurs épouses) où chaque membre a ses propres
-  // parents ailleurs n'est pas détectée par ce mécanisme structurel,
-  // mais peut tout autant croiser un autre lien.
-  const croiseQuelqueChose = (x1, y1, x2, y2, laneY, gap) => {
-    const verticalCroiseHorizontal = (xC, yA, yB) => {
-      const yMin = Math.min(yA, yB), yMax = Math.max(yA, yB);
-      return (segmentsHorizontauxParCouloir.get(gap) || [])
-        .some(h => h.xFrom <= xC && xC <= h.xTo && h.y > yMin + 4 && h.y < yMax - 4);
-    };
-    return verticalCroiseHorizontal(x1, y1, laneY) || verticalCroiseHorizontal(x2, laneY, y2);
+  // Même principe, pour un segment VERTICAL à x fixe qui traverserait un
+  // horizontal déjà posé (ex. la branche d'un enfant qui coupe le tronc
+  // d'une autre fratrie positionnée entre son point de départ et son
+  // point d'arrivée) : un simple saut en arc sur place, symétrique à
+  // segmentAvecSauts — aucune raison géométrique de traiter ce sens
+  // différemment de l'autre.
+  const segmentVerticalAvecSauts = (x, yDepart, yArrivee, gap) => {
+    const sens = yArrivee >= yDepart ? 1 : -1;
+    const yMin = Math.min(yDepart, yArrivee), yMax = Math.max(yDepart, yArrivee);
+    const croisements = (segmentsHorizontauxParCouloir.get(gap) || [])
+      .filter(h => h.xFrom <= x && x <= h.xTo && h.y > yMin + 8 && h.y < yMax - 8)
+      .map(h => h.y)
+      .sort((a,b) => sens > 0 ? a - b : b - a);
+    let frag = '';
+    croisements.forEach(yc => {
+      const avant = yc - sens * 6, apres = yc + sens * 6;
+      frag += ` L ${x} ${avant} A 6 6 0 0 ${sens > 0 ? 0 : 1} ${x} ${apres}`;
+    });
+    frag += ` L ${x} ${yArrivee}`;
+    return frag;
   };
+
+  // Un lien qui chevaucherait, sur une portion commune, le tronc
+  // horizontal d'une autre fratrie déjà posée reste bloquant (un
+  // décalage de hauteur ne peut de toute façon rien y changer, voir plus
+  // bas). En revanche, un simple point de croisement — horizontal qui
+  // coupe un vertical, OU vertical qui coupe un horizontal — n'est
+  // JAMAIS bloquant : les deux sont gérés proprement par un petit saut
+  // en arc sur place (segmentAvecSauts / segmentVerticalAvecSauts), sans
+  // avoir besoin d'un détour par la marge.
 
   // Séparation par portée : au-delà d'1 génération d'écart, toujours routé
   // par la marge (impossible de faire autrement proprement). En-deçà,
@@ -1494,15 +1503,29 @@ function construireVueGraphique(){
   const traitesLocalement = [];
   groupesOrdonnes.forEach(groupe => {
     const c0 = groupe[0];
-    const laneY = hautCouloir(c0.gapDebut) + (basCouloir(c0.gapDebut) - hautCouloir(c0.gapDebut)) * (c0.estPont ? FRACTION_VOIE_PONT : FRACTION_VOIE_NORMALE);
+    const fractionParDefaut = c0.estPont ? FRACTION_VOIE_PONT : FRACTION_VOIE_NORMALE;
+    const fractionMax = c0.estPont ? 0.9 : 0.82;
     const xMinGroupe = Math.min(c0.x1, ...groupe.map(c => c.x2));
     const xMaxGroupe = Math.max(c0.x1, ...groupe.map(c => c.x2));
-    const croise = groupe.some(c =>
-      croiseQuelqueChose(xMinGroupe, c.y1, xMaxGroupe, c.y1, laneY, c.gapDebut) ||
-      croiseQuelqueChose(c.x1, c.y1, c.x2, c.y2, laneY, c.gapDebut)
-    ) || chevaucheHorizontalement(xMinGroupe, xMaxGroupe, laneY, c0.gapDebut);
 
-    if (croise) {
+    // Seul le chevauchement en parallèle (même hauteur, portion d'x en
+    // commun) est bloquant — plus aucun croisement ponctuel ne l'est,
+    // donc un simple décalage de hauteur a maintenant de bonnes chances
+    // de suffire à lui seul (les points de croisement qu'il crée en
+    // route sont gérés par les sauts en arc au moment du tracé).
+    let laneY = hautCouloir(c0.gapDebut) + (basCouloir(c0.gapDebut) - hautCouloir(c0.gapDebut)) * fractionParDefaut;
+    let propre = !chevaucheHorizontalement(xMinGroupe, xMaxGroupe, laneY, c0.gapDebut);
+    if (!propre) {
+      for (const decalage of [0.15, 0.30, -0.15, 0.08, -0.08]) {
+        const fractionEssai = Math.max(0.12, Math.min(fractionParDefaut + decalage, fractionMax));
+        const laneYEssai = hautCouloir(c0.gapDebut) + (basCouloir(c0.gapDebut) - hautCouloir(c0.gapDebut)) * fractionEssai;
+        if (!chevaucheHorizontalement(xMinGroupe, xMaxGroupe, laneYEssai, c0.gapDebut)) {
+          laneY = laneYEssai; propre = true; break;
+        }
+      }
+    }
+
+    if (!propre) {
       groupe.forEach(c => aPromouvoir.push(c));
     } else {
       // Gardé sur sa voie locale : on enregistre tout de suite l'empreinte
@@ -1539,7 +1562,9 @@ function construireVueGraphique(){
 
   traitesLocalement.forEach(({x1,y1,x2,y2,gapDebut,laneY,incertain,estPontStructurel}) => {
     const classes = 'lien-filiation' + (estPontStructurel ? ' lien-pont-profond' : '') + (incertain ? ' lien-incertain' : '');
-    const d = `M ${x1} ${y1} L ${x1} ${laneY}` + segmentAvecSauts(x1, x2, laneY, gapDebut) + ` L ${x2} ${y2}`;
+    const d = `M ${x1} ${y1}` + segmentVerticalAvecSauts(x1, y1, laneY, gapDebut)
+      + segmentAvecSauts(x1, x2, laneY, gapDebut)
+      + segmentVerticalAvecSauts(x2, laneY, y2, gapDebut);
     svg.appendChild(creer('path', { class: classes, d }));
   });
 
