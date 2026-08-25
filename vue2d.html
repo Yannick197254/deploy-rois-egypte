@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.21</span>
+  <span class="badge-version">v2.22</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1251,16 +1251,17 @@ function construireVueGraphique(){
   // d'écart, jamais de pont profond) — dessinés en premier ; on retient
   // aussi leurs segments verticaux par "couloir" pour permettre aux liens
   // en pointillés de sauter proprement par-dessus s'ils les croisent.
-  const segmentsVerticauxParCouloir = new Map(); // gap -> [{x, yFrom, yTo}, ...]
-  const ajouterSegment = (gap, x, yFrom, yTo) => {
+  const segmentsVerticauxParCouloir = new Map(); // gap -> [{x, yFrom, yTo, clefFratrie}, ...]
+  const ajouterSegment = (gap, x, yFrom, yTo, clefFratrie) => {
     if(!segmentsVerticauxParCouloir.has(gap)) segmentsVerticauxParCouloir.set(gap, []);
-    segmentsVerticauxParCouloir.get(gap).push({ x, yFrom: Math.min(yFrom,yTo), yTo: Math.max(yFrom,yTo) });
+    segmentsVerticauxParCouloir.get(gap).push({ x, yFrom: Math.min(yFrom,yTo), yTo: Math.max(yFrom,yTo), clefFratrie });
   };
-  const segmentsHorizontauxParCouloir = new Map(); // gap -> [{y, xFrom, xTo}, ...]
-  const ajouterSegmentH = (gap, y, xFrom, xTo) => {
+  const segmentsHorizontauxParCouloir = new Map(); // gap -> [{y, xFrom, xTo, clefFratrie}, ...]
+  const ajouterSegmentH = (gap, y, xFrom, xTo, clefFratrie) => {
     if(!segmentsHorizontauxParCouloir.has(gap)) segmentsHorizontauxParCouloir.set(gap, []);
-    segmentsHorizontauxParCouloir.get(gap).push({ y, xFrom: Math.min(xFrom,xTo), xTo: Math.max(xFrom,xTo) });
+    segmentsHorizontauxParCouloir.get(gap).push({ y, xFrom: Math.min(xFrom,xTo), xTo: Math.max(xFrom,xTo), clefFratrie });
   };
+
 
   const tousConnecteurs = [];
   const filiationDe = new Map(); // enfantId -> {pere, mere}
@@ -1407,17 +1408,29 @@ function construireVueGraphique(){
     return largeurMaxEntre(genA, genB) + CANAL_MARGE; // filet de sécurité, ne devrait jamais servir
   };
 
+  // Registre partagé des croisements déjà "résolus" par un saut en arc :
+  // un même point de croisement ne doit recevoir qu'un seul saut, posé
+  // par le premier des deux traits (vertical ou horizontal, peu importe)
+  // qui le rencontre — sinon les deux traits impliqués ajoutent chacun
+  // leur propre petit saut au même endroit, ce qui double inutilement le
+  // contournement visuel.
+  const croisementsResolus = new Set();
+  const clefCroisement = (x, y) => Math.round(x) + ',' + Math.round(y);
+
   // Petit utilitaire : segment horizontal à hauteur "laneY" dans le couloir
   // "gap", avec saut en arc à chaque croisement d'un lien déjà posé.
-  const segmentAvecSauts = (xDepart, xArrivee, laneY, gap) => {
+  const segmentAvecSauts = (xDepart, xArrivee, laneY, gap, clefFratrie) => {
     const sens = xArrivee >= xDepart ? 1 : -1;
     const xMin = Math.min(xDepart, xArrivee), xMax = Math.max(xDepart, xArrivee);
     const croisements = (segmentsVerticauxParCouloir.get(gap) || [])
-      .filter(s => s.yFrom <= laneY && laneY <= s.yTo && s.x > xMin + 8 && s.x < xMax - 8)
+      .filter(s => s.yFrom <= laneY && laneY <= s.yTo && s.x > xMin + 8 && s.x < xMax - 8 && s.clefFratrie !== clefFratrie)
       .map(s => s.x)
       .sort((a,b) => sens > 0 ? a - b : b - a);
     let frag = '';
     croisements.forEach(xc => {
+      const clef = clefCroisement(xc, laneY);
+      if (croisementsResolus.has(clef)) return; // déjà réglé par l'autre trait impliqué
+      croisementsResolus.add(clef);
       const avant = xc - sens * 6, apres = xc + sens * 6;
       frag += ` L ${avant} ${laneY} A 6 6 0 0 ${sens > 0 ? 1 : 0} ${apres} ${laneY}`;
     });
@@ -1431,15 +1444,18 @@ function construireVueGraphique(){
   // point d'arrivée) : un simple saut en arc sur place, symétrique à
   // segmentAvecSauts — aucune raison géométrique de traiter ce sens
   // différemment de l'autre.
-  const segmentVerticalAvecSauts = (x, yDepart, yArrivee, gap) => {
+  const segmentVerticalAvecSauts = (x, yDepart, yArrivee, gap, clefFratrie) => {
     const sens = yArrivee >= yDepart ? 1 : -1;
     const yMin = Math.min(yDepart, yArrivee), yMax = Math.max(yDepart, yArrivee);
     const croisements = (segmentsHorizontauxParCouloir.get(gap) || [])
-      .filter(h => h.xFrom <= x && x <= h.xTo && h.y > yMin + 8 && h.y < yMax - 8)
+      .filter(h => h.xFrom <= x && x <= h.xTo && h.y > yMin + 8 && h.y < yMax - 8 && h.clefFratrie !== clefFratrie)
       .map(h => h.y)
       .sort((a,b) => sens > 0 ? a - b : b - a);
     let frag = '';
     croisements.forEach(yc => {
+      const clef = clefCroisement(x, yc);
+      if (croisementsResolus.has(clef)) return; // déjà réglé par l'autre trait impliqué
+      croisementsResolus.add(clef);
       const avant = yc - sens * 6, apres = yc + sens * 6;
       frag += ` L ${x} ${avant} A 6 6 0 0 ${sens > 0 ? 0 : 1} ${x} ${apres}`;
     });
@@ -1533,9 +1549,9 @@ function construireVueGraphique(){
       // prochain groupe traité dans ce même couloir en tienne compte.
       groupe.forEach(c => {
         traitesLocalement.push({ ...c, laneY });
-        ajouterSegment(c.gapDebut, c.x1, c.y1, laneY);
-        ajouterSegment(c.gapDebut, c.x2, laneY, c.y2);
-        ajouterSegmentH(c.gapDebut, laneY, c.x1, c.x2);
+        ajouterSegment(c.gapDebut, c.x1, c.y1, laneY, c.clefFratrie);
+        ajouterSegment(c.gapDebut, c.x2, laneY, c.y2, c.clefFratrie);
+        ajouterSegmentH(c.gapDebut, laneY, c.x1, c.x2, c.clefFratrie);
       });
     }
   });
@@ -1560,11 +1576,11 @@ function construireVueGraphique(){
   svg.setAttribute('width', largeurTotale);
   svg.setAttribute('height', hauteurTotale);
 
-  traitesLocalement.forEach(({x1,y1,x2,y2,gapDebut,laneY,incertain,estPontStructurel}) => {
+  traitesLocalement.forEach(({x1,y1,x2,y2,gapDebut,laneY,incertain,estPontStructurel,clefFratrie}) => {
     const classes = 'lien-filiation' + (estPontStructurel ? ' lien-pont-profond' : '') + (incertain ? ' lien-incertain' : '');
-    const d = `M ${x1} ${y1}` + segmentVerticalAvecSauts(x1, y1, laneY, gapDebut)
-      + segmentAvecSauts(x1, x2, laneY, gapDebut)
-      + segmentVerticalAvecSauts(x2, laneY, y2, gapDebut);
+    const d = `M ${x1} ${y1}` + segmentVerticalAvecSauts(x1, y1, laneY, gapDebut, clefFratrie)
+      + segmentAvecSauts(x1, x2, laneY, gapDebut, clefFratrie)
+      + segmentVerticalAvecSauts(x2, laneY, y2, gapDebut, clefFratrie);
     svg.appendChild(creer('path', { class: classes, d }));
   });
 
