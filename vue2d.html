@@ -61,7 +61,7 @@
   #vueGraphique .noeud-clic:hover .noeud-boite{ stroke:var(--bleu); stroke-width:2; }
   #zoneCanevas.pan-actif{ cursor:grab; }
   #zoneCanevas.pan-en-cours{ cursor:grabbing; }
-  #vueGraphique .lien-mariage{ stroke:#c0392b; stroke-width:8; }
+  #vueGraphique .lien-mariage{ stroke:#c0392b; stroke-width:4; }
   #vueGraphique .lien-mariage-decale{ stroke-dasharray:4,3; }
   #vueGraphique .lien-filiation{ stroke:#2e7d32; stroke-width:1.6; fill:none; }
   #vueGraphique .lien-filiation.lien-pont-profond{ stroke:#b8860b; }
@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.33</span>
+  <span class="badge-version">v2.34</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -787,7 +787,7 @@ function construireVueEnsemble(){
 const VG = {
   LARGEUR_PERSONNE: 150,
   HAUTEUR_BOITE: 46,
-  ECART_COUPLE: 14,
+  ECART_COUPLE: 28,
   ECART_UNION: 36,
   ECART_RACINES: 90,
   HAUTEUR_LIGNE: 220,
