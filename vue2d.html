@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.23</span>
+  <span class="badge-version">v2.24</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1457,7 +1457,8 @@ function construireVueGraphique(){
       if (croisementsResolus.has(clef)) return; // déjà réglé par l'autre trait impliqué
       croisementsResolus.add(clef);
       const avant = yc - sens * 6, apres = yc + sens * 6;
-      frag += ` L ${x} ${avant} A 6 6 0 0 ${sens > 0 ? 0 : 1} ${x} ${apres}`;
+      const decale = x + 6; // petit décroché latéral, plus simple et plus fiable qu'un arc
+      frag += ` L ${x} ${avant} L ${decale} ${avant} L ${decale} ${apres} L ${x} ${apres}`;
     });
     frag += ` L ${x} ${yArrivee}`;
     return frag;
