@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.24</span>
+  <span class="badge-version">v2.25</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1408,17 +1408,15 @@ function construireVueGraphique(){
     return largeurMaxEntre(genA, genB) + CANAL_MARGE; // filet de sécurité, ne devrait jamais servir
   };
 
-  // Registre partagé des croisements déjà "résolus" par un saut en arc :
-  // un même point de croisement ne doit recevoir qu'un seul saut, posé
-  // par le premier des deux traits (vertical ou horizontal, peu importe)
-  // qui le rencontre — sinon les deux traits impliqués ajoutent chacun
-  // leur propre petit saut au même endroit, ce qui double inutilement le
-  // contournement visuel.
-  const croisementsResolus = new Set();
-  const clefCroisement = (x, y) => Math.round(x) + ',' + Math.round(y);
-
   // Petit utilitaire : segment horizontal à hauteur "laneY" dans le couloir
-  // "gap", avec saut en arc à chaque croisement d'un lien déjà posé.
+  // "gap", avec saut en arc à chaque croisement d'un lien déjà posé. Seul
+  // ce sens (horizontal qui saute par-dessus un vertical) est utilisé —
+  // les segments verticaux traversent tout droit, sans tenter leur propre
+  // saut : puisque tous les segments sont enregistrés avant que quoi que
+  // ce soit ne soit dessiné, ce saut horizontal contourne correctement
+  // n'importe quel vertical déjà en place, peu importe l'ordre de
+  // traitement d'origine — pas besoin d'un second mécanisme côté vertical,
+  // qui ne faisait que doubler le contournement au même endroit.
   const segmentAvecSauts = (xDepart, xArrivee, laneY, gap, clefFratrie) => {
     const sens = xArrivee >= xDepart ? 1 : -1;
     const xMin = Math.min(xDepart, xArrivee), xMax = Math.max(xDepart, xArrivee);
@@ -1428,39 +1426,10 @@ function construireVueGraphique(){
       .sort((a,b) => sens > 0 ? a - b : b - a);
     let frag = '';
     croisements.forEach(xc => {
-      const clef = clefCroisement(xc, laneY);
-      if (croisementsResolus.has(clef)) return; // déjà réglé par l'autre trait impliqué
-      croisementsResolus.add(clef);
       const avant = xc - sens * 6, apres = xc + sens * 6;
       frag += ` L ${avant} ${laneY} A 6 6 0 0 ${sens > 0 ? 1 : 0} ${apres} ${laneY}`;
     });
     frag += ` L ${xArrivee} ${laneY}`;
-    return frag;
-  };
-
-  // Même principe, pour un segment VERTICAL à x fixe qui traverserait un
-  // horizontal déjà posé (ex. la branche d'un enfant qui coupe le tronc
-  // d'une autre fratrie positionnée entre son point de départ et son
-  // point d'arrivée) : un simple saut en arc sur place, symétrique à
-  // segmentAvecSauts — aucune raison géométrique de traiter ce sens
-  // différemment de l'autre.
-  const segmentVerticalAvecSauts = (x, yDepart, yArrivee, gap, clefFratrie) => {
-    const sens = yArrivee >= yDepart ? 1 : -1;
-    const yMin = Math.min(yDepart, yArrivee), yMax = Math.max(yDepart, yArrivee);
-    const croisements = (segmentsHorizontauxParCouloir.get(gap) || [])
-      .filter(h => h.xFrom <= x && x <= h.xTo && h.y > yMin + 8 && h.y < yMax - 8 && h.clefFratrie !== clefFratrie)
-      .map(h => h.y)
-      .sort((a,b) => sens > 0 ? a - b : b - a);
-    let frag = '';
-    croisements.forEach(yc => {
-      const clef = clefCroisement(x, yc);
-      if (croisementsResolus.has(clef)) return; // déjà réglé par l'autre trait impliqué
-      croisementsResolus.add(clef);
-      const avant = yc - sens * 6, apres = yc + sens * 6;
-      const decale = x + 6; // petit décroché latéral, plus simple et plus fiable qu'un arc
-      frag += ` L ${x} ${avant} L ${decale} ${avant} L ${decale} ${apres} L ${x} ${apres}`;
-    });
-    frag += ` L ${x} ${yArrivee}`;
     return frag;
   };
 
@@ -1579,9 +1548,9 @@ function construireVueGraphique(){
 
   traitesLocalement.forEach(({x1,y1,x2,y2,gapDebut,laneY,incertain,estPontStructurel,clefFratrie}) => {
     const classes = 'lien-filiation' + (estPontStructurel ? ' lien-pont-profond' : '') + (incertain ? ' lien-incertain' : '');
-    const d = `M ${x1} ${y1}` + segmentVerticalAvecSauts(x1, y1, laneY, gapDebut, clefFratrie)
+    const d = `M ${x1} ${y1} L ${x1} ${laneY}`
       + segmentAvecSauts(x1, x2, laneY, gapDebut, clefFratrie)
-      + segmentVerticalAvecSauts(x2, laneY, y2, gapDebut, clefFratrie);
+      + ` L ${x2} ${y2}`;
     svg.appendChild(creer('path', { class: classes, d }));
   });
 
@@ -1600,11 +1569,11 @@ function construireVueGraphique(){
     const laneY1 = hautCouloir(gapDebut) + (basCouloir(gapDebut) - hautCouloir(gapDebut)) * FRACTION_VOIE_PONT;
     const laneY2 = hautCouloir(gapArrivee) + (basCouloir(gapArrivee) - hautCouloir(gapArrivee)) * FRACTION_VOIE_PONT;
 
-    let d = `M ${x1} ${y1}` + segmentVerticalAvecSauts(x1, y1, laneY1, gapDebut, clefFratrie);
+    let d = `M ${x1} ${y1} L ${x1} ${laneY1}`;
     d += segmentAvecSauts(x1, canalX, laneY1, gapDebut, clefFratrie);
     d += ` L ${canalX} ${laneY2}`; // descente verticale dans le canal, espace vide vérifié
     d += segmentAvecSauts(canalX, x2, laneY2, gapArrivee, clefFratrie);
-    d += segmentVerticalAvecSauts(x2, laneY2, y2, gapArrivee, clefFratrie);
+    d += ` L ${x2} ${y2}`;
     svg.appendChild(creer('path', { class:'lien-filiation lien-pont-profond' + (incertain ? ' lien-incertain' : ''), d }));
   });
 
