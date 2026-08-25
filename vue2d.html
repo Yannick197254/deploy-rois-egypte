@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.27</span>
+  <span class="badge-version">v2.29</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1408,11 +1408,11 @@ function construireVueGraphique(){
     return largeurMaxEntre(genA, genB) + CANAL_MARGE; // filet de sécurité, ne devrait jamais servir
   };
 
-  // Segment horizontal à hauteur "laneY", avec un petit saut en arc
-  // visible à chaque croisement d'un vertical déjà posé — c'est ce qui
-  // rend le "pont" visible. Combiné avec le petit vide laissé dans le
-  // vertical au même endroit (segmentVerticalAvecTrous ci-dessous), rien
-  // ne se dessine sous l'arc.
+  // Segment horizontal à hauteur "laneY" : à chaque croisement d'un
+  // vertical déjà posé, une petite bosse visible (montée puis descente)
+  // AVEC un vrai vide pile au sommet — le saut et le vide sont sur la
+  // MÊME ligne, celle qui traverse, peu importe si c'est un trait plein
+  // ou en pointillé.
   const segmentAvecSauts = (xDepart, xArrivee, laneY, gap, clefFratrie) => {
     const sens = xArrivee >= xDepart ? 1 : -1;
     const xMin = Math.min(xDepart, xArrivee), xMax = Math.max(xDepart, xArrivee);
@@ -1422,17 +1422,17 @@ function construireVueGraphique(){
       .sort((a,b) => sens > 0 ? a - b : b - a);
     let frag = '';
     croisements.forEach(xc => {
-      const avant = xc - sens * 6, apres = xc + sens * 6;
-      frag += ` L ${avant} ${laneY} A 6 6 0 0 ${sens > 0 ? 1 : 0} ${apres} ${laneY}`;
+      const avant = xc - sens * 7, apres = xc + sens * 7;
+      const picAvant = xc - sens * 1, picApres = xc + sens * 1;
+      frag += ` L ${avant} ${laneY} L ${picAvant} ${laneY - 6} M ${picApres} ${laneY - 6} L ${apres} ${laneY}`;
     });
     frag += ` L ${xArrivee} ${laneY}`;
     return frag;
   };
 
-  // Segment vertical à x fixe, avec un petit VIDE (pas un arc, pour ne
-  // pas doubler le saut déjà posé par l'horizontal) à chaque croisement
-  // d'un horizontal déjà posé — le trait s'interrompt juste avant,
-  // reprend juste après, laissant la place à l'arc de l'horizontal.
+  // Même principe pour un segment vertical à x fixe : petite bosse
+  // latérale visible AVEC un vide pile au sommet, à chaque croisement
+  // d'un horizontal déjà posé.
   const segmentVerticalAvecTrous = (x, yDepart, yArrivee, gap, clefFratrie) => {
     const sens = yArrivee >= yDepart ? 1 : -1;
     const yMin = Math.min(yDepart, yArrivee), yMax = Math.max(yDepart, yArrivee);
@@ -1442,8 +1442,9 @@ function construireVueGraphique(){
       .sort((a,b) => sens > 0 ? a - b : b - a);
     let frag = '';
     croisements.forEach(yc => {
-      const avant = yc - sens * 8, apres = yc + sens * 8;
-      frag += ` L ${x} ${avant} M ${x} ${apres}`;
+      const avant = yc - sens * 7, apres = yc + sens * 7;
+      const picAvant = yc - sens * 1, picApres = yc + sens * 1;
+      frag += ` L ${x} ${avant} L ${x + 6} ${picAvant} M ${x + 6} ${picApres} L ${x} ${apres}`;
     });
     frag += ` L ${x} ${yArrivee}`;
     return frag;
