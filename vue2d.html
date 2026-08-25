@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.22</span>
+  <span class="badge-version">v2.23</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1593,17 +1593,17 @@ function construireVueGraphique(){
   // affiché en pointillé (style "pont"), même si le lien n'était pas
   // structurellement un pont à l'origine — la promotion elle-même
   // signale visuellement qu'un détour a été nécessaire.
-  pontsParMarge.forEach(({x1,y1,x2,y2,gapDebut,gapFin,incertain}, index) => {
+  pontsParMarge.forEach(({x1,y1,x2,y2,gapDebut,gapFin,incertain,clefFratrie}, index) => {
     const gapArrivee = gapFin - 1;
     const canalX = canalXParPont[index];
     const laneY1 = hautCouloir(gapDebut) + (basCouloir(gapDebut) - hautCouloir(gapDebut)) * FRACTION_VOIE_PONT;
     const laneY2 = hautCouloir(gapArrivee) + (basCouloir(gapArrivee) - hautCouloir(gapArrivee)) * FRACTION_VOIE_PONT;
 
-    let d = `M ${x1} ${y1} L ${x1} ${laneY1}`;
-    d += segmentAvecSauts(x1, canalX, laneY1, gapDebut);
+    let d = `M ${x1} ${y1}` + segmentVerticalAvecSauts(x1, y1, laneY1, gapDebut, clefFratrie);
+    d += segmentAvecSauts(x1, canalX, laneY1, gapDebut, clefFratrie);
     d += ` L ${canalX} ${laneY2}`; // descente verticale dans le canal, espace vide vérifié
-    d += segmentAvecSauts(canalX, x2, laneY2, gapArrivee);
-    d += ` L ${x2} ${y2}`;
+    d += segmentAvecSauts(canalX, x2, laneY2, gapArrivee, clefFratrie);
+    d += segmentVerticalAvecSauts(x2, laneY2, y2, gapArrivee, clefFratrie);
     svg.appendChild(creer('path', { class:'lien-filiation lien-pont-profond' + (incertain ? ' lien-incertain' : ''), d }));
   });
 
