@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.29</span>
+  <span class="badge-version">v2.30</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1410,9 +1410,9 @@ function construireVueGraphique(){
 
   // Segment horizontal à hauteur "laneY" : à chaque croisement d'un
   // vertical déjà posé, une petite bosse visible (montée puis descente)
-  // AVEC un vrai vide pile au sommet — le saut et le vide sont sur la
-  // MÊME ligne, celle qui traverse, peu importe si c'est un trait plein
-  // ou en pointillé.
+  // AVEC un vrai vide pile au sommet. RÈGLE : seul l'horizontal saute —
+  // le vertical, lui, traverse toujours tout droit, sans interruption
+  // (voir plus bas, plus de fonction dédiée pour lui).
   const segmentAvecSauts = (xDepart, xArrivee, laneY, gap, clefFratrie) => {
     const sens = xArrivee >= xDepart ? 1 : -1;
     const xMin = Math.min(xDepart, xArrivee), xMax = Math.max(xDepart, xArrivee);
@@ -1427,26 +1427,6 @@ function construireVueGraphique(){
       frag += ` L ${avant} ${laneY} L ${picAvant} ${laneY - 6} M ${picApres} ${laneY - 6} L ${apres} ${laneY}`;
     });
     frag += ` L ${xArrivee} ${laneY}`;
-    return frag;
-  };
-
-  // Même principe pour un segment vertical à x fixe : petite bosse
-  // latérale visible AVEC un vide pile au sommet, à chaque croisement
-  // d'un horizontal déjà posé.
-  const segmentVerticalAvecTrous = (x, yDepart, yArrivee, gap, clefFratrie) => {
-    const sens = yArrivee >= yDepart ? 1 : -1;
-    const yMin = Math.min(yDepart, yArrivee), yMax = Math.max(yDepart, yArrivee);
-    const croisements = (segmentsHorizontauxParCouloir.get(gap) || [])
-      .filter(h => h.xFrom <= x && x <= h.xTo && h.y > yMin + 4 && h.y < yMax - 4 && h.clefFratrie !== clefFratrie)
-      .map(h => h.y)
-      .sort((a,b) => sens > 0 ? a - b : b - a);
-    let frag = '';
-    croisements.forEach(yc => {
-      const avant = yc - sens * 7, apres = yc + sens * 7;
-      const picAvant = yc - sens * 1, picApres = yc + sens * 1;
-      frag += ` L ${x} ${avant} L ${x + 6} ${picAvant} M ${x + 6} ${picApres} L ${x} ${apres}`;
-    });
-    frag += ` L ${x} ${yArrivee}`;
     return frag;
   };
 
@@ -1565,9 +1545,9 @@ function construireVueGraphique(){
 
   traitesLocalement.forEach(({x1,y1,x2,y2,gapDebut,laneY,incertain,estPontStructurel,clefFratrie}) => {
     const classes = 'lien-filiation' + (estPontStructurel ? ' lien-pont-profond' : '') + (incertain ? ' lien-incertain' : '');
-    const d = `M ${x1} ${y1}` + segmentVerticalAvecTrous(x1, y1, laneY, gapDebut, clefFratrie)
+    const d = `M ${x1} ${y1} L ${x1} ${laneY}`
       + segmentAvecSauts(x1, x2, laneY, gapDebut, clefFratrie)
-      + segmentVerticalAvecTrous(x2, laneY, y2, gapDebut, clefFratrie);
+      + ` L ${x2} ${y2}`;
     svg.appendChild(creer('path', { class: classes, d }));
   });
 
@@ -1585,11 +1565,11 @@ function construireVueGraphique(){
     const laneY1 = hautCouloir(gapDebut) + (basCouloir(gapDebut) - hautCouloir(gapDebut)) * FRACTION_VOIE_PONT;
     const laneY2 = hautCouloir(gapArrivee) + (basCouloir(gapArrivee) - hautCouloir(gapArrivee)) * FRACTION_VOIE_PONT;
 
-    let d = `M ${x1} ${y1}` + segmentVerticalAvecTrous(x1, y1, laneY1, gapDebut, clefFratrie);
+    let d = `M ${x1} ${y1} L ${x1} ${laneY1}`;
     d += segmentAvecSauts(x1, canalX, laneY1, gapDebut, clefFratrie);
     d += ` L ${canalX} ${laneY2}`; // descente verticale dans le canal, espace vide vérifié
     d += segmentAvecSauts(canalX, x2, laneY2, gapArrivee, clefFratrie);
-    d += segmentVerticalAvecTrous(x2, laneY2, y2, gapArrivee, clefFratrie);
+    d += ` L ${x2} ${y2}`;
     svg.appendChild(creer('path', { class:'lien-filiation lien-pont-profond' + (incertain ? ' lien-incertain' : ''), d }));
   });
 
