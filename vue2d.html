@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.34</span>
+  <span class="badge-version">v2.35</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1516,6 +1516,14 @@ function construireVueGraphique(){
 
     if (!propre) {
       groupe.forEach(c => aPromouvoir.push(c));
+    } else if (groupe.length === 1 && Math.abs(c0.x1 - c0.x2) <= VG.LARGEUR_PERSONNE / 2) {
+      // Enfant unique dont le parent tombe déjà dans l'emprise de sa case
+      // (pas forcément centré — atterrir dans le tiers gauche ou droit
+      // suffit) : un simple trait vertical direct plutôt que le décroché
+      // habituel, pour ne pas donner l'illusion trompeuse d'un tronc
+      // partagé avec une fratrie voisine qui rejoindrait la même hauteur.
+      traitesLocalement.push({ ...c0, laneY: c0.y2, traitDirect: true });
+      ajouterSegment(c0.gapDebut, c0.x1, c0.y1, c0.y2, c0.clefFratrie);
     } else {
       // Gardé sur sa voie locale : on enregistre tout de suite l'empreinte
       // de chaque enfant (2 verticaux + 1 horizontal), pour que le
@@ -1549,11 +1557,13 @@ function construireVueGraphique(){
   svg.setAttribute('width', largeurTotale);
   svg.setAttribute('height', hauteurTotale);
 
-  traitesLocalement.forEach(({x1,y1,x2,y2,gapDebut,laneY,incertain,estPontStructurel,clefFratrie}) => {
+  traitesLocalement.forEach(({x1,y1,x2,y2,gapDebut,laneY,incertain,estPontStructurel,clefFratrie,traitDirect}) => {
     const classes = 'lien-filiation' + (estPontStructurel ? ' lien-pont-profond' : '') + (incertain ? ' lien-incertain' : '');
-    const d = `M ${x1} ${y1} L ${x1} ${laneY}`
-      + segmentAvecSauts(x1, x2, laneY, gapDebut, clefFratrie)
-      + ` L ${x2} ${y2}`;
+    const d = traitDirect
+      ? `M ${x1} ${y1} L ${x1} ${y2}`
+      : `M ${x1} ${y1} L ${x1} ${laneY}`
+        + segmentAvecSauts(x1, x2, laneY, gapDebut, clefFratrie)
+        + ` L ${x2} ${y2}`;
     svg.appendChild(creer('path', { class: classes, d }));
   });
 
