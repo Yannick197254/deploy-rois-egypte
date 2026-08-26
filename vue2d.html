@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.37</span>
+  <span class="badge-version">v2.38</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1028,7 +1028,7 @@ function ordonnerEtPositionner(unions, unionParentDe){
   // appliquée ici (une union dont la génération approximative dépasse la
   // limite n'est simplement jamais ajoutée comme enfant). ----
   const enfantsUnionsPar = new Map();
-  const alignementEnfantUnique = new Map(); // unionEnfant -> { membresParent: [...], enfantId }
+  const pairesAlignementBrutes = new Map(); // unionEnfant -> [{m, enfantId}, ...]
   unions.forEach(uParent => {
     const enfantsUnions = new Set();
     uParent.membres.forEach(m => {
@@ -1042,11 +1042,24 @@ function ordonnerEtPositionner(unions, unionParentDe){
         if(pontsGeresParAdjacence.has(unionEnfant)) return; // géré à part
         if(parentPorteurGeneralise.has(unionEnfant) && parentPorteurGeneralise.get(unionEnfant) !== uParent.id) return; // pas le parent porteur
         enfantsUnions.add(unionEnfant);
-        if(!alignementEnfantUnique.has(unionEnfant)) alignementEnfantUnique.set(unionEnfant, { membresParent: [], enfantId });
-        alignementEnfantUnique.get(unionEnfant).membresParent.push(m);
+        if(!pairesAlignementBrutes.has(unionEnfant)) pairesAlignementBrutes.set(unionEnfant, []);
+        pairesAlignementBrutes.get(unionEnfant).push({ m, enfantId });
       });
     });
     enfantsUnionsPar.set(uParent.id, [...enfantsUnions]);
+  });
+  // Une même union enfant peut être atteinte par 2 personnes différentes
+  // (ex. une femme qui est aussi la fille d'un des membres du parent, cas
+  // Néféroura : fille de Touthmosis II ET épouse de Touthmosis III) — il ne
+  // faut retenir que les parents du bon enfant, celui qui est l'ancre de sa
+  // propre union (le membre autour duquel elle est construite), sinon le
+  // calcul de la cible mélangerait les parents de deux personnes distinctes.
+  const alignementEnfantUnique = new Map(); // unionEnfant -> { membresParent: [...], enfantId }
+  pairesAlignementBrutes.forEach((paires, unionEnfant) => {
+    const uEnfant = unions.get(unionEnfant);
+    const enfantRetenu = paires.some(p => p.enfantId === uEnfant.anchor) ? uEnfant.anchor : paires[0].enfantId;
+    const membresParent = paires.filter(p => p.enfantId === enfantRetenu).map(p => p.m);
+    alignementEnfantUnique.set(unionEnfant, { membresParent, enfantId: enfantRetenu });
   });
 
   // Largeur "propre" d'une union : généralisée à N membres alignés côte à
