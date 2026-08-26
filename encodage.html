@@ -528,7 +528,7 @@
 <div class="top-bar">
 <header>
   <h1>𓂀 Rois d'Égypte antique</h1>
-  <p>Interface d'encodage · v2.05 &nbsp;·&nbsp; <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button> &nbsp;·&nbsp; <button class="link-btn" onclick="openConfig()">⚙ Changer de connexion</button> &nbsp;·&nbsp; <button class="link-btn" onclick="exportToExcel()">💾 Sauvegarder en Excel</button> &nbsp;·&nbsp; <button class="link-btn" id="btn-import" onclick="document.getElementById('import-file').click()">📥 Importer depuis Excel</button> &nbsp;·&nbsp; <a class="link-btn" href="vue3d.html" style="text-decoration:underline;">🌳 Vue 3D</a> &nbsp;·&nbsp; <a class="link-btn" href="vue2d.html" style="text-decoration:underline;">📐 Vue 2D</a></p>
+  <p>Interface d'encodage · v2.06 &nbsp;·&nbsp; <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button> &nbsp;·&nbsp; <button class="link-btn" onclick="openConfig()">⚙ Changer de connexion</button> &nbsp;·&nbsp; <button class="link-btn" onclick="exportToExcel()">💾 Sauvegarder en Excel</button> &nbsp;·&nbsp; <button class="link-btn" id="btn-import" onclick="document.getElementById('import-file').click()">📥 Importer depuis Excel</button> &nbsp;·&nbsp; <a class="link-btn" href="vue3d.html" style="text-decoration:underline;">🌳 Vue 3D</a> &nbsp;·&nbsp; <a class="link-btn" href="vue2d.html" style="text-decoration:underline;">📐 Vue 2D</a></p>
   <input type="file" id="import-file" accept=".xlsx" style="display:none;" onchange="importFromExcel(this.files[0])">
 </header>
 
@@ -572,7 +572,7 @@
           <label>Nom translittéré</label>
           <input type="text" id="p-nom_translittere" placeholder="ex : Ra-mesu-sw">
         </div>
-        <div class="field">
+        <div class="field" id="champ-fils_aine-wrapper">
           <label>Fils aîné</label>
           <select id="p-fils_aine">
             <option value="false">Non</option>
@@ -586,7 +586,7 @@
           <label>Dynastie</label>
           <input type="text" id="p-dynastie" placeholder="ex : XIXe dynastie">
         </div>
-        <div class="field">
+        <div class="field" id="champ-ordre_succession-wrapper">
           <label>Ordre de succession</label>
           <input type="number" step="any" id="p-ordre_succession" placeholder="ex : 3">
         </div>
@@ -629,7 +629,7 @@
       </div>
 
       <div id="champs-femme" class="form-grid" style="margin-top:10px;">
-        <div class="field">
+        <div class="field" id="champ-statut_epouse-wrapper">
           <label>Statut d'épouse</label>
           <select id="p-statut_epouse">
             <option value="">— non précisé —</option>
@@ -638,6 +638,20 @@
             <option value="concubine">Concubine</option>
           </select>
         </div>
+      </div>
+
+      <datalist id="fonctions-datalist"></datalist>
+      <div id="champs-fonctions" class="form-grid" style="margin-top:10px; grid-column:1/-1;">
+        <div class="field"><label>Fonction 1</label><input type="text" id="p-fonction_1" list="fonctions-datalist" placeholder="ex : Vizir"></div>
+        <div class="field"><label>Fonction 2</label><input type="text" id="p-fonction_2" list="fonctions-datalist"></div>
+        <div class="field"><label>Fonction 3</label><input type="text" id="p-fonction_3" list="fonctions-datalist"></div>
+        <div class="field"><label>Fonction 4</label><input type="text" id="p-fonction_4" list="fonctions-datalist"></div>
+        <div class="field"><label>Fonction 5</label><input type="text" id="p-fonction_5" list="fonctions-datalist"></div>
+        <div class="field"><label>Fonction 6</label><input type="text" id="p-fonction_6" list="fonctions-datalist"></div>
+        <div class="field"><label>Fonction 7</label><input type="text" id="p-fonction_7" list="fonctions-datalist"></div>
+        <div class="field"><label>Fonction 8</label><input type="text" id="p-fonction_8" list="fonctions-datalist"></div>
+        <div class="field"><label>Fonction 9</label><input type="text" id="p-fonction_9" list="fonctions-datalist"></div>
+        <div class="field"><label>Fonction 10</label><input type="text" id="p-fonction_10" list="fonctions-datalist"></div>
       </div>
 
       <div id="champs-secondaires" class="form-grid" style="margin-top:10px;">
@@ -970,6 +984,31 @@ const LS_ARBRES_KEY = 'genealogie_arbres';      // liste des arbres memorises : 
 const LS_ACTIF_KEY = 'genealogie_arbre_actif';  // id de l'arbre actuellement connecte
 const LS_DRAFT_KEY = 'genealogie_connexion_brouillon'; // saisie en cours, avant validation
 let sb = null;
+let fonctionsConnues = []; // noms déjà connus (triés), pour éviter des insertions redondantes
+
+async function loadFonctions() {
+  const { data, error } = await sb.from('fonctions').select('nom').order('nom');
+  if (error) return; // pas bloquant : la table peut ne pas encore exister sur d'anciens arbres
+  fonctionsConnues = (data || []).map(f => f.nom);
+  const dl = document.getElementById('fonctions-datalist');
+  if (dl) dl.innerHTML = fonctionsConnues.map(n => '<option value="' + escapeHtml(n) + '">').join('');
+}
+
+// Ajoute un nouveau titre à la liste commune s'il n'y figure pas encore
+// (comparaison insensible à la casse), sans jamais bloquer l'enregistrement
+// de la personne en cas d'erreur.
+async function ajouterFonctionSiNouvelle(nom) {
+  if (!nom) return;
+  const dejaConnue = fonctionsConnues.some(f => f.toLowerCase() === nom.toLowerCase());
+  if (dejaConnue) return;
+  const { error } = await sb.from('fonctions').insert({ nom });
+  if (!error) {
+    fonctionsConnues.push(nom);
+    fonctionsConnues.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+    const dl = document.getElementById('fonctions-datalist');
+    if (dl) dl.innerHTML = fonctionsConnues.map(n => '<option value="' + escapeHtml(n) + '">').join('');
+  }
+}
 let personnesCache = [];
 
 // La barre du haut (header + onglets) reste fixe a l'ecran ; on mesure sa
@@ -1231,7 +1270,9 @@ async function exportToExcel() {
     age_acces_trone: p.age_acces_trone, duree_regne: p.duree_regne, ordre_succession: p.ordre_succession,
     nom_translittere: p.nom_translittere, statut_epouse: p.statut_epouse, fils_aine: p.fils_aine,
     champ_texte_1: p.champ_texte_1, champ_texte_2: p.champ_texte_2, champ_texte_3: p.champ_texte_3, champ_texte_4: p.champ_texte_4,
-    commentaire: p.commentaire
+    commentaire: p.commentaire,
+    fonction_1: p.fonction_1, fonction_2: p.fonction_2, fonction_3: p.fonction_3, fonction_4: p.fonction_4, fonction_5: p.fonction_5,
+    fonction_6: p.fonction_6, fonction_7: p.fonction_7, fonction_8: p.fonction_8, fonction_9: p.fonction_9, fonction_10: p.fonction_10
   }));
 
   const mariagesRows = (mariages || []).map(m => ({
@@ -1315,6 +1356,8 @@ async function importFromExcel(file) {
         fils_aine: estVrai(p.fils_aine),
         champ_texte_1: p.champ_texte_1, champ_texte_2: p.champ_texte_2, champ_texte_3: p.champ_texte_3, champ_texte_4: p.champ_texte_4,
         commentaire: p.commentaire,
+        fonction_1: p.fonction_1, fonction_2: p.fonction_2, fonction_3: p.fonction_3, fonction_4: p.fonction_4, fonction_5: p.fonction_5,
+        fonction_6: p.fonction_6, fonction_7: p.fonction_7, fonction_8: p.fonction_8, fonction_9: p.fonction_9, fonction_10: p.fonction_10,
       }));
 
     const mariagesAImporter = brutMariages
@@ -1399,6 +1442,15 @@ function majAffichageChampsRole() {
   document.getElementById('champs-femme').style.display = role === 'femme' ? 'grid' : 'none';
   // Les 4 champs libres servent surtout pour femme/enfant (le roi a déjà
   // beaucoup de champs dédiés) mais restent accessibles dans tous les cas.
+
+  // Le bloc des 10 fonctions reste unique (mêmes champs quel que soit le
+  // rôle) mais se déplace juste sous le champ le plus pertinent du rôle
+  // choisi : Ordre de succession (roi), Statut d'épouse (femme), Fils aîné (autre).
+  const blocFonctions = document.getElementById('champs-fonctions');
+  const ancre = role === 'roi' ? document.getElementById('champ-ordre_succession-wrapper')
+    : role === 'femme' ? document.getElementById('champ-statut_epouse-wrapper')
+    : document.getElementById('champ-fils_aine-wrapper');
+  if (ancre && blocFonctions) ancre.insertAdjacentElement('afterend', blocFonctions);
 }
 
 // ============================================================
@@ -1445,7 +1497,9 @@ function resetPersonneForm() {
   document.getElementById('personne-form-title').textContent = 'Ajouter une personne';
   ['nom_usuel','sexe','nom_translittere','dynastie','ordre_succession','nom_horus','nom_nebty',
    'nom_horus_or','nomen','prenomen','regne_debut','regne_fin','age_acces_trone','duree_regne',
-   'statut_epouse','champ_texte_1','champ_texte_2','champ_texte_3','champ_texte_4','commentaire'].forEach(f => {
+   'statut_epouse','champ_texte_1','champ_texte_2','champ_texte_3','champ_texte_4','commentaire',
+   'fonction_1','fonction_2','fonction_3','fonction_4','fonction_5',
+   'fonction_6','fonction_7','fonction_8','fonction_9','fonction_10'].forEach(f => {
     const el = document.getElementById('p-' + f);
     if (el) el.value = '';
   });
@@ -1482,6 +1536,16 @@ async function savePersonne() {
     champ_texte_3: document.getElementById('p-champ_texte_3').value || null,
     champ_texte_4: document.getElementById('p-champ_texte_4').value || null,
     commentaire: document.getElementById('p-commentaire').value || null,
+    fonction_1: document.getElementById('p-fonction_1').value.trim() || null,
+    fonction_2: document.getElementById('p-fonction_2').value.trim() || null,
+    fonction_3: document.getElementById('p-fonction_3').value.trim() || null,
+    fonction_4: document.getElementById('p-fonction_4').value.trim() || null,
+    fonction_5: document.getElementById('p-fonction_5').value.trim() || null,
+    fonction_6: document.getElementById('p-fonction_6').value.trim() || null,
+    fonction_7: document.getElementById('p-fonction_7').value.trim() || null,
+    fonction_8: document.getElementById('p-fonction_8').value.trim() || null,
+    fonction_9: document.getElementById('p-fonction_9').value.trim() || null,
+    fonction_10: document.getElementById('p-fonction_10').value.trim() || null,
   };
 
   try {
@@ -1492,6 +1556,10 @@ async function savePersonne() {
       ({ error } = await sb.from('personnes').insert(payload));
     }
     if (error) throw error;
+    // Ajoute les éventuels nouveaux titres à la liste commune (non bloquant).
+    for (let n = 1; n <= 10; n++) {
+      await ajouterFonctionSiNouvelle(payload['fonction_' + n]);
+    }
     setStatus('personne-status', 'Enregistré.', false);
     resetPersonneForm();
     await loadPersonnes();
@@ -1525,6 +1593,9 @@ function editPersonne(p) {
   document.getElementById('p-champ_texte_3').value = p.champ_texte_3 || '';
   document.getElementById('p-champ_texte_4').value = p.champ_texte_4 || '';
   document.getElementById('p-commentaire').value = p.commentaire || '';
+  for (let n = 1; n <= 10; n++) {
+    document.getElementById('p-fonction_' + n).value = p['fonction_' + n] || '';
+  }
   majAffichageChampsRole();
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
@@ -1862,6 +1933,7 @@ function renderFiliationsTable() {
 
 async function init() {
   majAffichageChampsRole();
+  await loadFonctions();
   await loadPersonnes();
   await loadMariages();
   await loadFiliations();
