@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.38</span>
+  <span class="badge-version">v2.39</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1208,6 +1208,60 @@ function ordonnerEtPositionner(unions, unionParentDe){
         x += largeurUnion(pontId) + VG.ECART_RACINES;
       }
     }
+  });
+
+  // ---- Repositionnement des racines isolées : une racine sans aucun
+  // "enfant normal" (donc jamais atteinte par la récursion habituelle) et
+  // dont l'UNIQUE lien avec le reste de l'arbre est un pont vers un enfant
+  // placé ailleurs (ex. 2 parents jamais mariés entre eux, connus
+  // uniquement via la filiation de leur fille) — plutôt que de la laisser
+  // à sa position de départ par défaut (tout à gauche), on la déplace
+  // directement au-dessus de cet enfant, pour que le pont devienne un
+  // simple lien local court plutôt qu'un grand détour par la marge.
+  const bridgesParRacineIsolee = new Map(); // racineId -> { personneCible, unionCible }
+  const enregistrerPont = (racineCandidate, personneCible) => {
+    if(!racineCandidate) return;
+    const rc = unions.get(racineCandidate);
+    if(!rc || (enfantsUnionsPar.get(racineCandidate) || []).length > 0) return; // pas isolée
+    const unionsCible = personToUnionsGlobal.get(personneCible) || [];
+    const unionCible = unions.get(unionsCible[0]);
+    if(!unionCible || unionCible.x === undefined) return; // cible pas placée
+    bridgesParRacineIsolee.set(racineCandidate, { personneCible, unionCible });
+  };
+  membreNonPorteurPont.forEach(personneCible => {
+    enregistrerPont(unionParentDe.get(personneCible), personneCible);
+  });
+  membresNonPorteurGeneralise.forEach(personneCible => {
+    enregistrerPont(unionParentDe.get(personneCible), personneCible);
+  });
+
+  // Regroupement par cible commune (ex. 2 parents non mariés visant le
+  // même enfant) pour les répartir côte à côte plutôt que superposés.
+  const parCible = new Map(); // "unionId:personneId" -> [racineId, ...]
+  bridgesParRacineIsolee.forEach((info, racineId) => {
+    const clef = info.unionCible.id + ':' + info.personneCible;
+    if(!parCible.has(clef)) parCible.set(clef, []);
+    parCible.get(clef).push(racineId);
+  });
+  parCible.forEach(racineIds => {
+    racineIds.sort((a,b) => nomUnion(unions.get(a)).localeCompare(nomUnion(unions.get(b))));
+    const { personneCible, unionCible } = bridgesParRacineIsolee.get(racineIds[0]);
+    const xCentreCible = unionCible.centreMembre[personneCible];
+    const yCible = unionCible.y - VG.HAUTEUR_LIGNE;
+    const largeurTotale = racineIds.reduce((s, rid) => s + largeurUnion(rid), 0) + (racineIds.length - 1) * VG.ECART_COUPLE;
+    let xDep = xCentreCible - largeurTotale / 2;
+    racineIds.forEach(rid => {
+      const r = unions.get(rid);
+      const decalage = (largeurUnion(rid) - largeurPropreUnion(r)) / 2;
+      r.x = xDep + decalage;
+      r.y = yCible;
+      r.gen = unionCible.gen - 1;
+      r.centreX = r.x + largeurPropreUnion(r) / 2;
+      r.membres.forEach((pid, i) => {
+        r.centreMembre[pid] = r.x + i * (VG.LARGEUR_PERSONNE + VG.ECART_COUPLE) + VG.LARGEUR_PERSONNE / 2;
+      });
+      xDep += largeurUnion(rid) + VG.ECART_COUPLE;
+    });
   });
 
   // Filet de sécurité : signale en console tout chevauchement résiduel.
