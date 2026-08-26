@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.47</span>
+  <span class="badge-version">v2.48</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1794,7 +1794,7 @@ function construireVueGraphique(){
           svg.appendChild(creer('line', { class:'lien-mariage' + (incertain ? ' lien-mariage-decale' : ''), x1:xAncre, y1:y, x2:xConjoint, y2:y }));
         } else {
           const yDecale = y + VG.HAUTEUR_BOITE * 0.75;
-          const d = `M ${xAncre} ${y} L ${xAncre} ${yDecale} L ${xConjoint} ${yDecale} L ${xConjoint} ${y}`;
+          const d = `M ${xAncre} ${y} L ${xAncre} ${yDecale}` + segmentAvecSauts(xAncre, xConjoint, yDecale, u.gen, null) + ` L ${xConjoint} ${y}`;
           svg.appendChild(creer('path', { class:'lien-mariage' + (incertain ? ' lien-mariage-decale' : ''), d, fill:'none' }));
         }
       });
