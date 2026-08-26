@@ -528,7 +528,7 @@
 <div class="top-bar">
 <header>
   <h1>𓂀 Rois d'Égypte antique</h1>
-  <p>Interface d'encodage · v2.03 &nbsp;·&nbsp; <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button> &nbsp;·&nbsp; <button class="link-btn" onclick="openConfig()">⚙ Changer de connexion</button> &nbsp;·&nbsp; <button class="link-btn" onclick="exportToExcel()">💾 Sauvegarder en Excel</button> &nbsp;·&nbsp; <button class="link-btn" id="btn-import" onclick="document.getElementById('import-file').click()">📥 Importer depuis Excel</button> &nbsp;·&nbsp; <a class="link-btn" href="vue3d.html" style="text-decoration:underline;">🌳 Vue 3D</a> &nbsp;·&nbsp; <a class="link-btn" href="vue2d.html" style="text-decoration:underline;">📐 Vue 2D</a></p>
+  <p>Interface d'encodage · v2.04 &nbsp;·&nbsp; <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button> &nbsp;·&nbsp; <button class="link-btn" onclick="openConfig()">⚙ Changer de connexion</button> &nbsp;·&nbsp; <button class="link-btn" onclick="exportToExcel()">💾 Sauvegarder en Excel</button> &nbsp;·&nbsp; <button class="link-btn" id="btn-import" onclick="document.getElementById('import-file').click()">📥 Importer depuis Excel</button> &nbsp;·&nbsp; <a class="link-btn" href="vue3d.html" style="text-decoration:underline;">🌳 Vue 3D</a> &nbsp;·&nbsp; <a class="link-btn" href="vue2d.html" style="text-decoration:underline;">📐 Vue 2D</a></p>
   <input type="file" id="import-file" accept=".xlsx" style="display:none;" onchange="importFromExcel(this.files[0])">
 </header>
 
@@ -1530,10 +1530,13 @@ function editPersonne(p) {
 }
 
 async function deletePersonne(id, nom) {
-  if (!confirm('Supprimer "' + nom + '" ? Ses mariages et filiations liés seront aussi supprimés.')) return;
+  if (!confirm('Mettre "' + nom + '" à la corbeille ? Ses mariages et filiations liés y seront aussi mis.')) return;
   try {
-    const { error } = await sb.from('personnes').delete().eq('id', id);
+    const maintenant = new Date().toISOString();
+    const { error } = await sb.from('personnes').update({ supprime_le: maintenant }).eq('id', id);
     if (error) throw error;
+    await sb.from('mariages').update({ supprime_le: maintenant }).or('personne_1_id.eq.' + id + ',personne_2_id.eq.' + id);
+    await sb.from('filiations').update({ supprime_le: maintenant }).or('enfant_id.eq.' + id + ',pere_id.eq.' + id + ',mere_id.eq.' + id);
     await loadPersonnes();
   } catch (e) {
     alert('Erreur : ' + e.message);
@@ -1541,7 +1544,7 @@ async function deletePersonne(id, nom) {
 }
 
 async function loadPersonnes() {
-  const { data, error } = await sb.from('personnes').select('*');
+  const { data, error } = await sb.from('personnes').select('*').is('supprime_le', null);
   const tbody = document.getElementById('personnes-table');
   if (error) { tbody.innerHTML = '<tr><td colspan="7" class="empty">Erreur : ' + error.message + '</td></tr>'; return; }
   const sorted = (data || []).slice().sort((a, b) =>
@@ -1666,8 +1669,8 @@ async function saveMariage() {
 }
 
 async function deleteMariage(id) {
-  if (!confirm('Supprimer ce mariage ?')) return;
-  const { error } = await sb.from('mariages').delete().eq('id', id);
+  if (!confirm('Mettre ce mariage à la corbeille ?')) return;
+  const { error } = await sb.from('mariages').update({ supprime_le: new Date().toISOString() }).eq('id', id);
   if (error) { alert('Erreur : ' + error.message); return; }
   await loadMariages();
 }
@@ -1707,7 +1710,7 @@ function majFlechesTriMariages() {
 }
 
 async function loadMariages() {
-  const { data, error } = await sb.from('mariages').select('*');
+  const { data, error } = await sb.from('mariages').select('*').is('supprime_le', null);
   const tbody = document.getElementById('mariages-table');
   if (error) { tbody.innerHTML = '<tr><td colspan="6" class="empty">Erreur : ' + error.message + '</td></tr>'; return; }
   mariagesCache = data || [];
@@ -1777,8 +1780,8 @@ async function saveFiliation() {
 }
 
 async function deleteFiliation(id) {
-  if (!confirm('Supprimer cette filiation ?')) return;
-  const { error } = await sb.from('filiations').delete().eq('id', id);
+  if (!confirm('Mettre cette filiation à la corbeille ?')) return;
+  const { error } = await sb.from('filiations').update({ supprime_le: new Date().toISOString() }).eq('id', id);
   if (error) { alert('Erreur : ' + error.message); return; }
   await loadFiliations();
 }
@@ -1816,7 +1819,7 @@ function majFlechesTriFiliations() {
 }
 
 async function loadFiliations() {
-  const { data, error } = await sb.from('filiations').select('*');
+  const { data, error } = await sb.from('filiations').select('*').is('supprime_le', null);
   const tbody = document.getElementById('filiations-table');
   if (error) { tbody.innerHTML = '<tr><td colspan="5" class="empty">Erreur : ' + error.message + '</td></tr>'; return; }
   filiationsCache = data || [];
