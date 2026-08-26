@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.53</span>
+  <span class="badge-version">v2.54</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -790,7 +790,7 @@ const VG = {
   ECART_COUPLE: 37,
   ECART_UNION: 36,
   ECART_RACINES: 90,
-  HAUTEUR_LIGNE: 220,
+  HAUTEUR_LIGNE: 330,
   MARGE: 50,
 };
 
@@ -800,7 +800,7 @@ const VG = {
 // en haut) — elle déborde donc autant vers le haut que vers le bas.
 function hauteurBoiteDe(pid){
   const p = PERSONNES.get(pid);
-  return (p && p.role === 'roi') ? VG.HAUTEUR_BOITE * 2 * (4/3) * (4/3) : VG.HAUTEUR_BOITE;
+  return (p && p.role === 'roi') ? VG.HAUTEUR_BOITE * 2 * (4/3) * (4/3) * (4/3) : VG.HAUTEUR_BOITE;
 }
 // Largeur de vignette selon le rôle : un roi a une vignette 15% plus
 // large — uniquement pour le rendu (rectangle affiché), la mise en page
@@ -815,7 +815,7 @@ function largeurBoiteDe(pid){
 // conjoints dans une union polygame : 1er conjoint direct de chaque côté à
 // 10%, 2e à 35%, 3e à 60%, 4e à 75%. Au-delà (cas non spécifié), on continue
 // d'espacer de 15% en 15%, plafonné pour rester dans la boîte.
-const PALIERS_LIEN_ROI = [0.10, 0.35, 0.60, 0.75];
+const PALIERS_LIEN_ROI = [0.10, 0.35, 0.55, 0.75];
 function fractionLienRoi(rang){ // rang = 1 pour le conjoint adjacent à l'ancre, 2 pour le suivant, etc.
   const idx = rang - 1;
   if(idx < PALIERS_LIEN_ROI.length) return PALIERS_LIEN_ROI[idx];
@@ -1850,13 +1850,10 @@ function construireVueGraphique(){
           (m.p1 === u.anchor && m.p2 === pid) || (m.p1 === pid && m.p2 === u.anchor)
         );
         const incertain = !!(mariageCorrespondant && mariageCorrespondant.incertain);
-        if(rang === 1){
-          svg.appendChild(creer('line', { class:'lien-mariage' + (incertain ? ' lien-mariage-decale' : ''), x1:xAncre, y1:yAncre, x2:xConjoint, y2:yConjoint }));
-        } else {
-          const yDecale = y + VG.HAUTEUR_BOITE * 0.75;
-          const d = `M ${xAncre} ${yAncre} L ${xAncre} ${yDecale}` + segmentAvecSauts(xAncre, xConjoint, yDecale, u.gen, null) + ` L ${xConjoint} ${yConjoint}`;
-          svg.appendChild(creer('path', { class:'lien-mariage' + (incertain ? ' lien-mariage-decale' : ''), d, fill:'none' }));
-        }
+        // Trait direct dans tous les cas : l'étagement vertical par palier
+        // (voir bordsBoiteDe) sépare déjà les rangs, donc plus besoin d'un
+        // détour par une "voie" commune pour éviter les boîtes intermédiaires.
+        svg.appendChild(creer('line', { class:'lien-mariage' + (incertain ? ' lien-mariage-decale' : ''), x1:xAncre, y1:yAncre, x2:xConjoint, y2:yConjoint }));
       });
     }
   });
