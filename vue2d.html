@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.39</span>
+  <span class="badge-version">v2.40</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1234,6 +1234,21 @@ function ordonnerEtPositionner(unions, unionParentDe){
   membresNonPorteurGeneralise.forEach(personneCible => {
     enregistrerPont(unionParentDe.get(personneCible), personneCible);
   });
+  // Cas non couvert par les 2 sources ci-dessus : le SECOND parent (celui
+  // qui n'est PAS dans l'union retenue par unionParentDe) quand père et
+  // mère sont deux unions différentes — ex. 2 parents jamais mariés entre
+  // eux. unionParentDe ne retient qu'un seul des deux (voir
+  // calculerLiensFiliation), l'autre reste sinon totalement livré à sa
+  // position par défaut.
+  FILIATIONS.forEach(f => {
+    if(!f.pere || !f.mere || !PERSONNES.has(f.enfant)) return;
+    const unionsPere = personToUnionsGlobal.get(f.pere) || [];
+    const unionsMere = personToUnionsGlobal.get(f.mere) || [];
+    if(unionsPere.some(uid => unionsMere.includes(uid))) return; // mariés entre eux, même union : déjà couvert
+    const porteur = unionParentDe.get(f.enfant);
+    if(porteur === unionsPere[0]) enregistrerPont(unionsMere[0], f.enfant);
+    else if(porteur === unionsMere[0]) enregistrerPont(unionsPere[0], f.enfant);
+  });
 
   // Regroupement par cible commune (ex. 2 parents non mariés visant le
   // même enfant) pour les répartir côte à côte plutôt que superposés.
@@ -1383,11 +1398,16 @@ function construireVueGraphique(){
       // Point de départ du trait : le milieu exact entre les 2 VRAIS parents
       // de cet enfant (pas le centre de toute la ligne, qui peut compter
       // d'autres conjoints ne concernant pas cet enfant — cas d'un roi avec
-      // plusieurs épouses).
+      // plusieurs épouses). Père et mère peuvent appartenir à 2 unions
+      // DIFFÉRENTES (jamais mariés entre eux) — chacun est donc localisé
+      // dans SA PROPRE union, pas dans "uParent" qui ne représente qu'un
+      // seul des deux dans ce cas.
       const fil = filiationDe.get(m);
+      const uParentPere = fil && fil.pere !== undefined ? unions.get((personToUnionsGlobal.get(fil.pere) || [])[0]) : null;
+      const uParentMere = fil && fil.mere !== undefined ? unions.get((personToUnionsGlobal.get(fil.mere) || [])[0]) : null;
       let x1;
-      const xPere = fil && fil.pere !== undefined ? uParent.centreMembre[fil.pere] : undefined;
-      const xMere = fil && fil.mere !== undefined ? uParent.centreMembre[fil.mere] : undefined;
+      const xPere = uParentPere && uParentPere.x !== undefined ? uParentPere.centreMembre[fil.pere] : undefined;
+      const xMere = uParentMere && uParentMere.x !== undefined ? uParentMere.centreMembre[fil.mere] : undefined;
       if(xPere !== undefined && xMere !== undefined) x1 = (xPere + xMere) / 2;
       else if(xPere !== undefined) x1 = xPere;
       else if(xMere !== undefined) x1 = xMere;
@@ -1397,11 +1417,12 @@ function construireVueGraphique(){
       // des deux si père et mère ont des hauteurs différentes (l'un roi,
       // l'autre non) — et arrive sur le haut réel de l'enfant, pour ne
       // jamais couper à travers une vignette de roi surélevée.
-      const yPereBas = fil && fil.pere !== undefined ? bordsBoiteDe(uParent, fil.pere).bottom : undefined;
-      const yMereBas = fil && fil.mere !== undefined ? bordsBoiteDe(uParent, fil.mere).bottom : undefined;
+      const yPereBas = uParentPere && uParentPere.x !== undefined ? bordsBoiteDe(uParentPere, fil.pere).bottom : undefined;
+      const yMereBas = uParentMere && uParentMere.x !== undefined ? bordsBoiteDe(uParentMere, fil.mere).bottom : undefined;
       const y1 = (yPereBas !== undefined || yMereBas !== undefined)
         ? Math.max(yPereBas ?? -Infinity, yMereBas ?? -Infinity)
         : uParent.y + VG.HAUTEUR_BOITE;
+      const gapDebutReel = Math.max(uParentPere ? uParentPere.gen : uParent.gen, uParentMere ? uParentMere.gen : uParent.gen);
       const x2 = u.centreMembre[m];
       const y2 = bordsBoiteDe(u, m).top;
       // estPont : soit détecté structurellement (remariage classique, union
@@ -1414,7 +1435,7 @@ function construireVueGraphique(){
       // ligne), même si l'un d'eux est par ailleurs individuellement
       // marqué "pont" pour une tout autre raison (ex. son propre mariage).
       const clefFratrie = uidParent + '|' + (fil && fil.pere || '') + '|' + (fil && fil.mere || '');
-      tousConnecteurs.push({ x1, y1, x2, y2, gapDebut: uParent.gen, gapFin: u.gen, incertain: !!(fil && fil.incertain), estPont: liensEnPointilles.has(m), estPontStructurel: liensEnPointilles.has(m), clefFratrie });
+      tousConnecteurs.push({ x1, y1, x2, y2, gapDebut: gapDebutReel, gapFin: u.gen, incertain: !!(fil && fil.incertain), estPont: liensEnPointilles.has(m), estPontStructurel: liensEnPointilles.has(m), clefFratrie });
     });
   });
 
