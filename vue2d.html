@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.35</span>
+  <span class="badge-version">v2.36</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1028,6 +1028,7 @@ function ordonnerEtPositionner(unions, unionParentDe){
   // appliquée ici (une union dont la génération approximative dépasse la
   // limite n'est simplement jamais ajoutée comme enfant). ----
   const enfantsUnionsPar = new Map();
+  const alignementEnfantUnique = new Map(); // unionEnfant -> { membresParent: [...], enfantId }
   unions.forEach(uParent => {
     const enfantsUnions = new Set();
     uParent.membres.forEach(m => {
@@ -1041,6 +1042,8 @@ function ordonnerEtPositionner(unions, unionParentDe){
         if(pontsGeresParAdjacence.has(unionEnfant)) return; // géré à part
         if(parentPorteurGeneralise.has(unionEnfant) && parentPorteurGeneralise.get(unionEnfant) !== uParent.id) return; // pas le parent porteur
         enfantsUnions.add(unionEnfant);
+        if(!alignementEnfantUnique.has(unionEnfant)) alignementEnfantUnique.set(unionEnfant, { membresParent: [], enfantId });
+        alignementEnfantUnique.get(unionEnfant).membresParent.push(m);
       });
     });
     enfantsUnionsPar.set(uParent.id, [...enfantsUnions]);
@@ -1093,8 +1096,34 @@ function ordonnerEtPositionner(unions, unionParentDe){
     const enfants = enfantsUnionsPar.get(uid) || [];
     let xEnfant = xDebut;
     enfants.forEach(eid => {
-      placerUnion(eid, xEnfant, gen + 1);
-      xEnfant += largeurUnion(eid) + VG.ECART_UNION;
+      let xCible = xEnfant;
+      if (enfants.length === 1) {
+        // Enfant unique : tenter d'aligner sa propre position (pas le
+        // centre de toute l'union enfant, qui peut être décalé par ses
+        // épouses) sur le centre du ou des vrai(s) parent(s) dans CETTE
+        // union — évite le décroché en marche d'escalier. On ne décale
+        // que vers la droite, jamais vers la gauche, pour ne pas risquer
+        // de chevaucher ce qui a déjà été placé avant.
+        const info = alignementEnfantUnique.get(eid);
+        if (info) {
+          const uEnfant = unions.get(eid);
+          const idxEnfant = uEnfant.membres.indexOf(info.enfantId);
+          if (idxEnfant !== -1) {
+            const decalageInterne = (largeurUnion(eid) - largeurPropreUnion(uEnfant)) / 2;
+            let xVoulu = info.membresParent.reduce((s, m) => s + u.centreMembre[m], 0) / info.membresParent.length
+              - (idxEnfant * (VG.LARGEUR_PERSONNE + VG.ECART_COUPLE) + VG.LARGEUR_PERSONNE / 2)
+              - decalageInterne;
+            // Jamais au-delà de la largeur totale déjà réservée pour cette
+            // branche entière, pour ne pas risquer de chevaucher la
+            // branche suivante placée juste après.
+            const xMaxAutorise = xDebut + largeurUnion(uid) - largeurUnion(eid);
+            xVoulu = Math.min(xVoulu, xMaxAutorise);
+            if (xVoulu > xEnfant) xCible = xVoulu;
+          }
+        }
+      }
+      placerUnion(eid, xCible, gen + 1);
+      xEnfant = unions.get(eid).x + largeurUnion(eid) + VG.ECART_UNION;
     });
   }
 
