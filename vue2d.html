@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.43</span>
+  <span class="badge-version">v2.44</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1114,48 +1114,50 @@ function ordonnerEtPositionner(unions, unionParentDe){
     let xEnfant = xDebut;
     enfants.forEach(eid => {
       let xCible = xEnfant;
-      if (enfants.length === 1) {
-        // Enfant unique : tenter d'aligner sa propre position (pas le
-        // centre de toute l'union enfant, qui peut être décalé par ses
-        // épouses) sur le centre du ou des vrai(s) parent(s) dans CETTE
-        // union — évite le décroché en marche d'escalier. Quand l'union
-        // enfant comporte PLUSIEURS personnes dont le vrai parent est ici
-        // (ex. 2 demi-frère/sœur mariés entre eux, chacun avec sa propre
-        // mère) — la cible retenue est la MOYENNE des positions idéales de
-        // chacun, un compromis plutôt que le choix arbitraire d'une seule
-        // personne. On ne décale que vers la droite, jamais vers la
-        // gauche, pour ne pas risquer de chevaucher ce qui a déjà été
-        // placé avant.
-        const infos = alignementEnfantUnique.get(eid);
-        if (infos && infos.length) {
-          const uEnfant = unions.get(eid);
-          const decalageInterne = (largeurUnion(eid) - largeurPropreUnion(uEnfant)) / 2;
-          const xVoulus = infos.map(({ enfantId, membresParent }) => {
-            const idx = uEnfant.membres.indexOf(enfantId);
-            if (idx === -1) return null;
-            const xParent = membresParent.reduce((s, m) => s + u.centreMembre[m], 0) / membresParent.length;
-            return xParent - (idx * (VG.LARGEUR_PERSONNE + VG.ECART_COUPLE) + VG.LARGEUR_PERSONNE / 2) - decalageInterne;
-          }).filter(v => v !== null);
-          if (xVoulus.length) {
-            let xVoulu = xVoulus.reduce((a, b) => a + b, 0) / xVoulus.length;
-            // Jamais au-delà de la largeur totale déjà réservée pour cette
-            // branche entière, pour ne pas risquer de chevaucher la
-            // branche suivante placée juste après.
-            // Marge généreuse mais bornée : la formule stricte basée sur la
-            // largeur déjà réservée tombe quasiment toujours à zéro dans le
-            // cas courant (un enfant entouré de plusieurs épouses, donc plus
-            // large que ses parents) — le vrai décalage nécessaire est
-            // souvent bien supérieur à l'écart de séparation standard. On
-            // autorise donc jusqu'à la moitié de la largeur propre de
-            // l'enfant, ce qui reste borné (jamais un décalage disproportionné)
-            // sans pour autant neutraliser la fonctionnalité comme le ferait
-            // la formule stricte. Risque résiduel, rare en pratique : si deux
-            // branches très proches l'une de l'autre subissent chacune un tel
-            // décalage, un léger chevauchement reste possible.
-            const xMaxAutorise = xEnfant + largeurPropreUnion(uEnfant) / 2;
-            xVoulu = Math.min(xVoulu, xMaxAutorise);
-            if (xVoulu > xEnfant) xCible = xVoulu;
-          }
+      // Tenter d'aligner la position de chaque enfant (pas le centre de
+      // toute son union, qui peut être décalé par ses propres épouses) sur
+      // le centre du ou des vrai(s) parent(s) dans CETTE union — évite le
+      // décroché en marche d'escalier. S'applique à CHAQUE enfant, même
+      // au sein d'une fratrie à plusieurs branches (ex. Touthmosis Ier a 5
+      // enfants répartis sur 4 unions différentes) — pas seulement quand
+      // il n'y en a qu'un seul, sinon un cas comme Touthmosis II/Hatchepsout
+      // (2 demi-frère/sœur mariés entre eux, chacun avec sa propre mère)
+      // ne serait jamais concerné puisque leur parent commun a par
+      // ailleurs d'autres enfants. Quand l'union enfant comporte
+      // PLUSIEURS personnes dont le vrai parent est ici, la cible retenue
+      // est la MOYENNE de leurs positions idéales respectives. On ne
+      // décale que vers la droite, jamais vers la gauche, pour ne pas
+      // risquer de chevaucher ce qui a déjà été placé avant (le frère ou
+      // la sœur précédent(e) dans l'ordre).
+      const infos = alignementEnfantUnique.get(eid);
+      if (infos && infos.length) {
+        const uEnfant = unions.get(eid);
+        const decalageInterne = (largeurUnion(eid) - largeurPropreUnion(uEnfant)) / 2;
+        const xVoulus = infos.map(({ enfantId, membresParent }) => {
+          const idx = uEnfant.membres.indexOf(enfantId);
+          if (idx === -1) return null;
+          const xParent = membresParent.reduce((s, m) => s + u.centreMembre[m], 0) / membresParent.length;
+          return xParent - (idx * (VG.LARGEUR_PERSONNE + VG.ECART_COUPLE) + VG.LARGEUR_PERSONNE / 2) - decalageInterne;
+        }).filter(v => v !== null);
+        if (xVoulus.length) {
+          let xVoulu = xVoulus.reduce((a, b) => a + b, 0) / xVoulus.length;
+          // Jamais au-delà de la largeur totale déjà réservée pour cette
+          // branche entière, pour ne pas risquer de chevaucher la
+          // branche suivante placée juste après.
+          // Marge généreuse mais bornée : la formule stricte basée sur la
+          // largeur déjà réservée tombe quasiment toujours à zéro dans le
+          // cas courant (un enfant entouré de plusieurs épouses, donc plus
+          // large que ses parents) — le vrai décalage nécessaire est
+          // souvent bien supérieur à l'écart de séparation standard. On
+          // autorise donc jusqu'à la moitié de la largeur propre de
+          // l'enfant, ce qui reste borné (jamais un décalage disproportionné)
+          // sans pour autant neutraliser la fonctionnalité comme le ferait
+          // la formule stricte. Risque résiduel, rare en pratique : si deux
+          // branches très proches l'une de l'autre subissent chacune un tel
+          // décalage, un léger chevauchement reste possible.
+          const xMaxAutorise = xEnfant + largeurPropreUnion(uEnfant) / 2;
+          xVoulu = Math.min(xVoulu, xMaxAutorise);
+          if (xVoulu > xEnfant) xCible = xVoulu;
         }
       }
       placerUnion(eid, xCible, gen + 1);
