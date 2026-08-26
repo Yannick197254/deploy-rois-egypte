@@ -528,7 +528,7 @@
 <div class="top-bar">
 <header>
   <h1>𓂀 Rois d'Égypte antique</h1>
-  <p>Interface d'encodage · v2.06 &nbsp;·&nbsp; <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button> &nbsp;·&nbsp; <button class="link-btn" onclick="openConfig()">⚙ Changer de connexion</button> &nbsp;·&nbsp; <button class="link-btn" onclick="exportToExcel()">💾 Sauvegarder en Excel</button> &nbsp;·&nbsp; <button class="link-btn" id="btn-import" onclick="document.getElementById('import-file').click()">📥 Importer depuis Excel</button> &nbsp;·&nbsp; <a class="link-btn" href="vue3d.html" style="text-decoration:underline;">🌳 Vue 3D</a> &nbsp;·&nbsp; <a class="link-btn" href="vue2d.html" style="text-decoration:underline;">📐 Vue 2D</a></p>
+  <p>Interface d'encodage · v2.07 &nbsp;·&nbsp; <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button> &nbsp;·&nbsp; <button class="link-btn" onclick="openConfig()">⚙ Changer de connexion</button> &nbsp;·&nbsp; <button class="link-btn" onclick="exportToExcel()">💾 Sauvegarder en Excel</button> &nbsp;·&nbsp; <button class="link-btn" id="btn-import" onclick="document.getElementById('import-file').click()">📥 Importer depuis Excel</button> &nbsp;·&nbsp; <a class="link-btn" href="vue3d.html" style="text-decoration:underline;">🌳 Vue 3D</a> &nbsp;·&nbsp; <a class="link-btn" href="vue2d.html" style="text-decoration:underline;">📐 Vue 2D</a></p>
   <input type="file" id="import-file" accept=".xlsx" style="display:none;" onchange="importFromExcel(this.files[0])">
 </header>
 
@@ -635,6 +635,7 @@
             <option value="">— non précisé —</option>
             <option value="grande_epouse_royale">Grande épouse royale</option>
             <option value="epouse_royale">Épouse royale</option>
+            <option value="epouse_secondaire">Épouse secondaire</option>
             <option value="concubine">Concubine</option>
           </select>
         </div>
