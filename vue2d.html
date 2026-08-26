@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.51</span>
+  <span class="badge-version">v2.52</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -794,13 +794,21 @@ const VG = {
   MARGE: 50,
 };
 
-// Hauteur de vignette selon le rôle : un roi a une vignette 2 fois plus
+// Hauteur de vignette selon le rôle : un roi a une vignette bien plus
 // haute que les autres, mais toujours centrée sur la même ligne
 // horizontale de génération que le reste de la rangée (pas juste alignée
 // en haut) — elle déborde donc autant vers le haut que vers le bas.
 function hauteurBoiteDe(pid){
   const p = PERSONNES.get(pid);
-  return (p && p.role === 'roi') ? VG.HAUTEUR_BOITE * 2 * (4/3) : VG.HAUTEUR_BOITE;
+  return (p && p.role === 'roi') ? VG.HAUTEUR_BOITE * 2 * (4/3) * (4/3) : VG.HAUTEUR_BOITE;
+}
+// Largeur de vignette selon le rôle : un roi a une vignette 15% plus
+// large — uniquement pour le rendu (rectangle affiché), la mise en page
+// (espacement entre unions/couples) reste calculée sur la largeur
+// nominale, comme pour la hauteur ci-dessus.
+function largeurBoiteDe(pid){
+  const p = PERSONNES.get(pid);
+  return (p && p.role === 'roi') ? VG.LARGEUR_PERSONNE * 1.15 : VG.LARGEUR_PERSONNE;
 }
 function bordsBoiteDe(u, pid){
   const centre = u.y + VG.HAUTEUR_BOITE / 2;
@@ -1799,25 +1807,37 @@ function construireVueGraphique(){
     }
     if(u.membres.length > 2 && u.anchor){
       // Cas polygame : un trait de l'ancre (ex. le roi) vers CHAQUE conjoint.
-      // Les conjoints adjacents reçoivent un trait droit classique ; les
-      // conjoints plus éloignés (3e épouse et au-delà) reçoivent un trait
-      // décalé en hauteur pour ne pas traverser une boîte intermédiaire —
-      // même principe que les liens en pointillés (ponts profonds), mais
-      // en autonome pour ne pas toucher ce système déjà en place.
+      // Le point d'accroche côté ancre n'est plus toujours au centre de sa
+      // vignette : il descend par paliers selon le rang du conjoint (1er
+      // conjoint direct de chaque côté à 10% de la hauteur de la vignette
+      // royale en partant du haut, 2e à 35%, 3e à 60%, 4e à 75%...) pour
+      // étaler visuellement les traits le long du bord, maintenant que la
+      // vignette royale est nettement plus grande.
       const idxAncre = u.membres.indexOf(u.anchor);
       const xAncre = u.centreMembre[u.anchor];
+      const { top: topAncre, hauteur: hAncre } = bordsBoiteDe(u, u.anchor);
+      const PALIERS_LIEN_ROI = [0.10, 0.35, 0.60, 0.75];
+      const fractionLienRoi = (rang) => {
+        const idx = rang - 1; // rang 1 = conjoint adjacent
+        if(idx < PALIERS_LIEN_ROI.length) return PALIERS_LIEN_ROI[idx];
+        // Au-delà du 4e conjoint de chaque côté (cas non spécifié) : on
+        // continue d'espacer de 15% en 15%, plafonné pour rester dans la boîte.
+        return Math.min(0.95, PALIERS_LIEN_ROI[PALIERS_LIEN_ROI.length - 1] + (idx - PALIERS_LIEN_ROI.length + 1) * 0.15);
+      };
       u.membres.forEach((pid, idx) => {
         if(pid === u.anchor) return;
         const xConjoint = u.centreMembre[pid];
+        const rang = Math.abs(idx - idxAncre);
+        const yAncre = topAncre + hAncre * fractionLienRoi(rang);
         const mariageCorrespondant = MARIAGES.find(m =>
           (m.p1 === u.anchor && m.p2 === pid) || (m.p1 === pid && m.p2 === u.anchor)
         );
         const incertain = !!(mariageCorrespondant && mariageCorrespondant.incertain);
-        if(Math.abs(idx - idxAncre) === 1){
-          svg.appendChild(creer('line', { class:'lien-mariage' + (incertain ? ' lien-mariage-decale' : ''), x1:xAncre, y1:y, x2:xConjoint, y2:y }));
+        if(rang === 1){
+          svg.appendChild(creer('line', { class:'lien-mariage' + (incertain ? ' lien-mariage-decale' : ''), x1:xAncre, y1:yAncre, x2:xConjoint, y2:y }));
         } else {
           const yDecale = y + VG.HAUTEUR_BOITE * 0.75;
-          const d = `M ${xAncre} ${y} L ${xAncre} ${yDecale}` + segmentAvecSauts(xAncre, xConjoint, yDecale, u.gen, null) + ` L ${xConjoint} ${y}`;
+          const d = `M ${xAncre} ${yAncre} L ${xAncre} ${yDecale}` + segmentAvecSauts(xAncre, xConjoint, yDecale, u.gen, null) + ` L ${xConjoint} ${y}`;
           svg.appendChild(creer('path', { class:'lien-mariage' + (incertain ? ' lien-mariage-decale' : ''), d, fill:'none' }));
         }
       });
@@ -1829,14 +1849,15 @@ function construireVueGraphique(){
     u.membres.forEach(m => {
       const p = PERSONNES.get(m);
       const cx = u.centreMembre[m];
-      const x = cx - VG.LARGEUR_PERSONNE / 2;
+      const largeur = largeurBoiteDe(m);
+      const x = cx - largeur / 2;
       const { top: y, hauteur: h } = bordsBoiteDe(u, m);
       const centreY = y + h / 2;
       const groupe = document.createElementNS(ns, 'g');
       groupe.setAttribute('class', 'noeud-clic');
       groupe.addEventListener('click', () => centrerSurPersonne(cx, centreY));
       if(!p){
-        groupe.appendChild(creer('rect', { class:'noeud-boite orpheline', x, y, width:VG.LARGEUR_PERSONNE, height:h, rx:5 }));
+        groupe.appendChild(creer('rect', { class:'noeud-boite orpheline', x, y, width:largeur, height:h, rx:5 }));
         const t = creer('text', { class:'noeud-nom', x: cx, y: centreY + 4, 'text-anchor':'middle' });
         t.textContent = '⚠️ id inconnu';
         groupe.appendChild(t);
@@ -1845,7 +1866,7 @@ function construireVueGraphique(){
       }
       const classeStatutEpouse = p.statut_epouse === 'grande_epouse_royale' ? ' grande-epouse'
         : p.statut_epouse === 'epouse_royale' ? ' epouse-royale' : '';
-      groupe.appendChild(creer('rect', { class:'noeud-boite' + (p.role === 'roi' ? ' roi' : '') + classeStatutEpouse, x, y, width:VG.LARGEUR_PERSONNE, height:h, rx:5 }));
+      groupe.appendChild(creer('rect', { class:'noeud-boite' + (p.role === 'roi' ? ' roi' : '') + classeStatutEpouse, x, y, width:largeur, height:h, rx:5 }));
       const regneTxt = [p.regne_debut, p.regne_fin].filter(Boolean).join(' – ');
       // Un roi (boîte 2x plus haute) garde son nom et son règne centrés
       // verticalement dans tout l'espace disponible, pas collés en haut
