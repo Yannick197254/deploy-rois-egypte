@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.40</span>
+  <span class="badge-version">v2.41</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1258,19 +1258,38 @@ function ordonnerEtPositionner(unions, unionParentDe){
     if(!parCible.has(clef)) parCible.set(clef, []);
     parCible.get(clef).push(racineId);
   });
+  // Recherche de la position horizontale la plus proche de l'idéal (centré
+  // sur l'enfant) qui ne chevauche aucune union déjà placée à la même
+  // génération — scan dans les deux sens (droite puis gauche à chaque
+  // palier), pour rester le plus proche possible de la verticale de
+  // l'enfant tout en garantissant l'absence de chevauchement.
+  const trouverPositionLibre = (xIdeal, largeur, gen) => {
+    const occupees = [...unions.values()]
+      .filter(u2 => u2.x !== undefined && u2.gen === gen)
+      .map(u2 => ({ debut: u2.x, fin: u2.x + largeurPropreUnion(u2) }));
+    const chevauche = (deb, fin) => occupees.some(o => deb < o.fin + VG.ECART_COUPLE && fin > o.debut - VG.ECART_COUPLE);
+    if (!chevauche(xIdeal, xIdeal + largeur)) return xIdeal;
+    for (let d = 4; d < 4000; d += 4) {
+      if (!chevauche(xIdeal + d, xIdeal + d + largeur)) return xIdeal + d;
+      if (!chevauche(xIdeal - d, xIdeal - d + largeur)) return xIdeal - d;
+    }
+    return xIdeal; // repli : rien trouvé dans la plage cherchée, on garde l'idéal
+  };
+
   parCible.forEach(racineIds => {
     racineIds.sort((a,b) => nomUnion(unions.get(a)).localeCompare(nomUnion(unions.get(b))));
     const { personneCible, unionCible } = bridgesParRacineIsolee.get(racineIds[0]);
     const xCentreCible = unionCible.centreMembre[personneCible];
     const yCible = unionCible.y - VG.HAUTEUR_LIGNE;
+    const genCible = unionCible.gen - 1;
     const largeurTotale = racineIds.reduce((s, rid) => s + largeurUnion(rid), 0) + (racineIds.length - 1) * VG.ECART_COUPLE;
-    let xDep = xCentreCible - largeurTotale / 2;
+    let xDep = trouverPositionLibre(xCentreCible - largeurTotale / 2, largeurTotale, genCible);
     racineIds.forEach(rid => {
       const r = unions.get(rid);
       const decalage = (largeurUnion(rid) - largeurPropreUnion(r)) / 2;
       r.x = xDep + decalage;
       r.y = yCible;
-      r.gen = unionCible.gen - 1;
+      r.gen = genCible;
       r.centreX = r.x + largeurPropreUnion(r) / 2;
       r.membres.forEach((pid, i) => {
         r.centreMembre[pid] = r.x + i * (VG.LARGEUR_PERSONNE + VG.ECART_COUPLE) + VG.LARGEUR_PERSONNE / 2;
