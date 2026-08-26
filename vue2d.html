@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.44</span>
+  <span class="badge-version">v2.45-diag</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1471,6 +1471,9 @@ function construireVueGraphique(){
       // ligne), même si l'un d'eux est par ailleurs individuellement
       // marqué "pont" pour une tout autre raison (ex. son propre mariage).
       const clefFratrie = uidParent + '|' + (fil && fil.pere || '') + '|' + (fil && fil.mere || '');
+      if (nomDe(m) === 'Touthmosis III' || nomDe(m) === 'Néféroura') {
+        console.log('[DIAG]', nomDe(m), 'x1=', x1.toFixed(0), 'x2=', x2.toFixed(0), 'clefFratrie=', clefFratrie);
+      }
       tousConnecteurs.push({ x1, y1, x2, y2, gapDebut: gapDebutReel, gapFin: u.gen, incertain: !!(fil && fil.incertain), estPont: liensEnPointilles.has(m), estPontStructurel: liensEnPointilles.has(m), clefFratrie });
     });
   });
