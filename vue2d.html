@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.41</span>
+  <span class="badge-version">v2.42</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -787,7 +787,7 @@ function construireVueEnsemble(){
 const VG = {
   LARGEUR_PERSONNE: 150,
   HAUTEUR_BOITE: 46,
-  ECART_COUPLE: 28,
+  ECART_COUPLE: 37,
   ECART_UNION: 36,
   ECART_RACINES: 90,
   HAUTEUR_LIGNE: 220,
@@ -805,7 +805,7 @@ function hauteurBoiteDe(pid){
 function bordsBoiteDe(u, pid){
   const centre = u.y + VG.HAUTEUR_BOITE / 2;
   const h = hauteurBoiteDe(pid);
-  return { top: centre - h / 2, bottom: centre + h / 2, hauteur: h };
+  return { top: centre - h / 2, bottom: centre + h / 2, centre, hauteur: h };
 }
 
 // Remonte la lignée d'une personne (père en priorité, sinon mère) jusqu'à
@@ -1432,12 +1432,15 @@ function construireVueGraphique(){
       else if(xMere !== undefined) x1 = xMere;
       else x1 = uParent.centreMembre[m] !== undefined ? uParent.centreMembre[m] : uParent.centreX;
 
-      // Le trait part du bas réel du/des parent(s) connu(s) — le plus bas
-      // des deux si père et mère ont des hauteurs différentes (l'un roi,
-      // l'autre non) — et arrive sur le haut réel de l'enfant, pour ne
-      // jamais couper à travers une vignette de roi surélevée.
-      const yPereBas = uParentPere && uParentPere.x !== undefined ? bordsBoiteDe(uParentPere, fil.pere).bottom : undefined;
-      const yMereBas = uParentMere && uParentMere.x !== undefined ? bordsBoiteDe(uParentMere, fil.mere).bottom : undefined;
+      // Le trait part de la hauteur du trait de mariage (le centre de la
+      // ligne) plutôt que du bas de la vignette, pour qu'il rejoigne
+      // visuellement le trait de mariage au lieu de s'arrêter en dessous —
+      // le plus bas des deux centres si père et mère ont des hauteurs
+      // différentes (l'un roi, l'autre non) — et arrive sur le haut réel de
+      // l'enfant, pour ne jamais couper à travers une vignette de roi
+      // surélevée.
+      const yPereBas = uParentPere && uParentPere.x !== undefined ? bordsBoiteDe(uParentPere, fil.pere).centre : undefined;
+      const yMereBas = uParentMere && uParentMere.x !== undefined ? bordsBoiteDe(uParentMere, fil.mere).centre : undefined;
       const y1 = (yPereBas !== undefined || yMereBas !== undefined)
         ? Math.max(yPereBas ?? -Infinity, yMereBas ?? -Infinity)
         : uParent.y + VG.HAUTEUR_BOITE;
