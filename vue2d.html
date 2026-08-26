@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.45</span>
+  <span class="badge-version">v2.46-diag</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1685,6 +1685,9 @@ function construireVueGraphique(){
           laneY = laneYEssai; propre = true; break;
         }
       }
+    }
+    if (Math.abs(xMinGroupe - 1498) < 5 || Math.abs(xMinGroupe - 1685) < 5) {
+      console.log('[DIAG2]', 'xMin=', xMinGroupe.toFixed(0), 'xMax=', xMaxGroupe.toFixed(0), 'laneY=', laneY.toFixed(0), 'propre=', propre);
     }
 
     if (!propre) {
