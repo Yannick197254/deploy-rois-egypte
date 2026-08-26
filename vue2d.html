@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.46-diag</span>
+  <span class="badge-version">v2.46</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1678,7 +1678,7 @@ function construireVueGraphique(){
     let laneY = hautCouloir(c0.gapDebut) + (basCouloir(c0.gapDebut) - hautCouloir(c0.gapDebut)) * fractionParDefaut;
     let propre = !chevaucheHorizontalement(xMinGroupe, xMaxGroupe, laneY, c0.gapDebut);
     if (!propre) {
-      for (const decalage of [0.15, 0.30, -0.15, 0.08, -0.08]) {
+      for (const decalage of [0.22, 0.35, -0.22, 0.14, -0.14]) {
         const fractionEssai = Math.max(0.12, Math.min(fractionParDefaut + decalage, fractionMax));
         const laneYEssai = hautCouloir(c0.gapDebut) + (basCouloir(c0.gapDebut) - hautCouloir(c0.gapDebut)) * fractionEssai;
         if (!chevaucheHorizontalement(xMinGroupe, xMaxGroupe, laneYEssai, c0.gapDebut)) {
@@ -1686,9 +1686,7 @@ function construireVueGraphique(){
         }
       }
     }
-    if (Math.abs(xMinGroupe - 1498) < 5 || Math.abs(xMinGroupe - 1685) < 5) {
-      console.log('[DIAG2]', 'xMin=', xMinGroupe.toFixed(0), 'xMax=', xMaxGroupe.toFixed(0), 'laneY=', laneY.toFixed(0), 'propre=', propre);
-    }
+
 
     if (!propre) {
       groupe.forEach(c => aPromouvoir.push(c));
