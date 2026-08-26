@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.42</span>
+  <span class="badge-version">v2.43</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1048,18 +1048,22 @@ function ordonnerEtPositionner(unions, unionParentDe){
     });
     enfantsUnionsPar.set(uParent.id, [...enfantsUnions]);
   });
-  // Une même union enfant peut être atteinte par 2 personnes différentes
-  // (ex. une femme qui est aussi la fille d'un des membres du parent, cas
-  // Néféroura : fille de Touthmosis II ET épouse de Touthmosis III) — il ne
-  // faut retenir que les parents du bon enfant, celui qui est l'ancre de sa
-  // propre union (le membre autour duquel elle est construite), sinon le
-  // calcul de la cible mélangerait les parents de deux personnes distinctes.
-  const alignementEnfantUnique = new Map(); // unionEnfant -> { membresParent: [...], enfantId }
+  // Une même union enfant peut être atteinte par plusieurs personnes
+  // différentes issues de CE parent (ex. Touthmosis II ET Hatchepsout,
+  // demi-frère et demi-sœur mariés entre eux, chacun avec sa propre mère
+  // au sein de l'union fusionnée de Touthmosis Ier) — on garde chaque
+  // enfant distinct séparément, avec SES PROPRES parents, plutôt que de
+  // n'en retenir qu'un seul : la cible finale sera une moyenne de leurs
+  // positions idéales respectives (voir plus bas), pas celle d'une seule
+  // personne arbitrairement choisie.
+  const alignementEnfantUnique = new Map(); // unionEnfant -> [{ membresParent: [...], enfantId }, ...]
   pairesAlignementBrutes.forEach((paires, unionEnfant) => {
-    const uEnfant = unions.get(unionEnfant);
-    const enfantRetenu = paires.some(p => p.enfantId === uEnfant.anchor) ? uEnfant.anchor : paires[0].enfantId;
-    const membresParent = paires.filter(p => p.enfantId === enfantRetenu).map(p => p.m);
-    alignementEnfantUnique.set(unionEnfant, { membresParent, enfantId: enfantRetenu });
+    const parEnfant = new Map(); // enfantId -> membresParent[]
+    paires.forEach(({ m, enfantId }) => {
+      if(!parEnfant.has(enfantId)) parEnfant.set(enfantId, []);
+      parEnfant.get(enfantId).push(m);
+    });
+    alignementEnfantUnique.set(unionEnfant, [...parEnfant.entries()].map(([enfantId, membresParent]) => ({ enfantId, membresParent })));
   });
 
   // Largeur "propre" d'une union : généralisée à N membres alignés côte à
@@ -1114,18 +1118,26 @@ function ordonnerEtPositionner(unions, unionParentDe){
         // Enfant unique : tenter d'aligner sa propre position (pas le
         // centre de toute l'union enfant, qui peut être décalé par ses
         // épouses) sur le centre du ou des vrai(s) parent(s) dans CETTE
-        // union — évite le décroché en marche d'escalier. On ne décale
-        // que vers la droite, jamais vers la gauche, pour ne pas risquer
-        // de chevaucher ce qui a déjà été placé avant.
-        const info = alignementEnfantUnique.get(eid);
-        if (info) {
+        // union — évite le décroché en marche d'escalier. Quand l'union
+        // enfant comporte PLUSIEURS personnes dont le vrai parent est ici
+        // (ex. 2 demi-frère/sœur mariés entre eux, chacun avec sa propre
+        // mère) — la cible retenue est la MOYENNE des positions idéales de
+        // chacun, un compromis plutôt que le choix arbitraire d'une seule
+        // personne. On ne décale que vers la droite, jamais vers la
+        // gauche, pour ne pas risquer de chevaucher ce qui a déjà été
+        // placé avant.
+        const infos = alignementEnfantUnique.get(eid);
+        if (infos && infos.length) {
           const uEnfant = unions.get(eid);
-          const idxEnfant = uEnfant.membres.indexOf(info.enfantId);
-          if (idxEnfant !== -1) {
-            const decalageInterne = (largeurUnion(eid) - largeurPropreUnion(uEnfant)) / 2;
-            let xVoulu = info.membresParent.reduce((s, m) => s + u.centreMembre[m], 0) / info.membresParent.length
-              - (idxEnfant * (VG.LARGEUR_PERSONNE + VG.ECART_COUPLE) + VG.LARGEUR_PERSONNE / 2)
-              - decalageInterne;
+          const decalageInterne = (largeurUnion(eid) - largeurPropreUnion(uEnfant)) / 2;
+          const xVoulus = infos.map(({ enfantId, membresParent }) => {
+            const idx = uEnfant.membres.indexOf(enfantId);
+            if (idx === -1) return null;
+            const xParent = membresParent.reduce((s, m) => s + u.centreMembre[m], 0) / membresParent.length;
+            return xParent - (idx * (VG.LARGEUR_PERSONNE + VG.ECART_COUPLE) + VG.LARGEUR_PERSONNE / 2) - decalageInterne;
+          }).filter(v => v !== null);
+          if (xVoulus.length) {
+            let xVoulu = xVoulus.reduce((a, b) => a + b, 0) / xVoulus.length;
             // Jamais au-delà de la largeur totale déjà réservée pour cette
             // branche entière, pour ne pas risquer de chevaucher la
             // branche suivante placée juste après.
