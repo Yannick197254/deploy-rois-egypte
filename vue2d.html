@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.45-diag</span>
+  <span class="badge-version">v2.45</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1471,9 +1471,6 @@ function construireVueGraphique(){
       // ligne), même si l'un d'eux est par ailleurs individuellement
       // marqué "pont" pour une tout autre raison (ex. son propre mariage).
       const clefFratrie = uidParent + '|' + (fil && fil.pere || '') + '|' + (fil && fil.mere || '');
-      if (nomDe(m) === 'Touthmosis III' || nomDe(m) === 'Néféroura') {
-        console.log('[DIAG]', nomDe(m), 'x1=', x1.toFixed(0), 'x2=', x2.toFixed(0), 'clefFratrie=', clefFratrie);
-      }
       tousConnecteurs.push({ x1, y1, x2, y2, gapDebut: gapDebutReel, gapFin: u.gen, incertain: !!(fil && fil.incertain), estPont: liensEnPointilles.has(m), estPontStructurel: liensEnPointilles.has(m), clefFratrie });
     });
   });
@@ -1649,10 +1646,19 @@ function construireVueGraphique(){
   // jusqu'à la nouvelle hauteur) doit de toute façon traverser l'ancienne
   // hauteur au passage, là où se trouve justement l'autre tronc. Seul un
   // vrai routage par la marge le peut.
+  //
+  // Une marge de 20px (pas juste 0, un vrai chevauchement strict) est
+  // volontairement exigée entre 2 troncs différents à la même hauteur :
+  // même sans chevauchement réel, 2 troncs qui se touchent exactement bout
+  // à bout (ex. le point d'arrivée de l'un = le point de départ de
+  // l'autre) donnent l'illusion trompeuse d'un seul trait continu qui se
+  // scinde en croix — un espace visuellement perceptible entre les deux
+  // lève cette ambiguïté.
   const chevaucheHorizontalement = (xMin, xMax, laneY, gap) => {
     const EPS = 3; // tolérance en y pour considérer 2 troncs "à la même hauteur"
+    const MARGE = 20; // marge minimale exigée entre 2 troncs distincts, même sans chevauchement réel
     return (segmentsHorizontauxParCouloir.get(gap) || [])
-      .some(h => Math.abs(h.y - laneY) < EPS && xMin < h.xTo - 8 && xMax > h.xFrom + 8);
+      .some(h => Math.abs(h.y - laneY) < EPS && xMin < h.xTo + MARGE && xMax > h.xFrom - MARGE);
   };
 
   const aPromouvoir = [];
