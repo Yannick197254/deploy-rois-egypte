@@ -317,7 +317,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.36</span>
+  <span class="badge-version">v2.37</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1116,7 +1116,18 @@ function ordonnerEtPositionner(unions, unionParentDe){
             // Jamais au-delà de la largeur totale déjà réservée pour cette
             // branche entière, pour ne pas risquer de chevaucher la
             // branche suivante placée juste après.
-            const xMaxAutorise = xDebut + largeurUnion(uid) - largeurUnion(eid);
+            // Marge généreuse mais bornée : la formule stricte basée sur la
+            // largeur déjà réservée tombe quasiment toujours à zéro dans le
+            // cas courant (un enfant entouré de plusieurs épouses, donc plus
+            // large que ses parents) — le vrai décalage nécessaire est
+            // souvent bien supérieur à l'écart de séparation standard. On
+            // autorise donc jusqu'à la moitié de la largeur propre de
+            // l'enfant, ce qui reste borné (jamais un décalage disproportionné)
+            // sans pour autant neutraliser la fonctionnalité comme le ferait
+            // la formule stricte. Risque résiduel, rare en pratique : si deux
+            // branches très proches l'une de l'autre subissent chacune un tel
+            // décalage, un léger chevauchement reste possible.
+            const xMaxAutorise = xEnfant + largeurPropreUnion(uEnfant) / 2;
             xVoulu = Math.min(xVoulu, xMaxAutorise);
             if (xVoulu > xEnfant) xCible = xVoulu;
           }
