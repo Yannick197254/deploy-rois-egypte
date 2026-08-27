@@ -64,8 +64,7 @@
   #vueGraphique .lien-mariage{ stroke:#c0392b; stroke-width:4; }
   #vueGraphique .lien-mariage-decale{ stroke-dasharray:4,3; }
   #vueGraphique .lien-filiation{ stroke:#2e7d32; stroke-width:1.6; fill:none; }
-  #vueGraphique .lien-filiation.lien-pont-profond{ stroke:#b8860b; }
-  #vueGraphique .lien-filiation.lien-incertain{ stroke:#a8432e; stroke-dasharray:5,3; }
+  #vueGraphique .lien-filiation.lien-incertain{ stroke-dasharray:5,3; }
   #vueGraphique .etiquette-generation{ font-size:11px; fill:#9a9484; font-weight:600; }
 
   #vueEnsemble{ display:none; padding:1.2rem 1.6rem; max-width:1100px; margin:0 auto; }
@@ -317,7 +316,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.55</span>
+  <span class="badge-version">v2.56</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1488,28 +1487,10 @@ function construireVueGraphique(){
       // le plus bas des deux centres si père et mère ont des hauteurs
       // différentes (l'un roi, l'autre non) — et arrive sur le haut réel de
       // l'enfant, pour ne jamais couper à travers une vignette de roi
-      // surélevée.
-      //
-      // Cas particulier : père et mère mariés entre eux mais NON adjacents
-      // dans leur union (l'un est l'ancre, l'autre une épouse éloignée,
-      // reliés par le trait de mariage DÉCALÉ en hauteur, pas le trait
-      // simple) — la moyenne de leurs 2 positions peut tomber tout près
-      // d'une personne intermédiaire sans rapport, donnant l'illusion
-      // trompeuse d'un rattachement à elle. Le trait doit alors toucher la
-      // hauteur du trait de mariage décalé, pas la hauteur normale de la
-      // ligne, pour bien montrer qu'il rejoint CE mariage précis.
+      // surélevée. bordsBoiteDe gère déjà tout seul le cas d'un conjoint
+      // positionné par palier (épouse d'un roi non adjacente) : pas besoin
+      // de cas particulier ici, le centre renvoyé est déjà le bon palier.
       let y1;
-      if(uParentPere && uParentMere && uParentPere === uParentMere && fil.pere !== undefined && fil.mere !== undefined){
-        const uCommun = uParentPere;
-        if(uCommun.anchor === fil.pere || uCommun.anchor === fil.mere){
-          const autre = uCommun.anchor === fil.pere ? fil.mere : fil.pere;
-          const idxAncre = uCommun.membres.indexOf(uCommun.anchor);
-          const idxAutre = uCommun.membres.indexOf(autre);
-          if(Math.abs(idxAncre - idxAutre) > 1){
-            y1 = uCommun.y + VG.HAUTEUR_BOITE / 2 + VG.HAUTEUR_BOITE * 0.75;
-          }
-        }
-      }
       if(y1 === undefined){
         const yPereBas = uParentPere && uParentPere.x !== undefined ? bordsBoiteDe(uParentPere, fil.pere).centre : undefined;
         const yMereBas = uParentMere && uParentMere.x !== undefined ? bordsBoiteDe(uParentMere, fil.mere).centre : undefined;
