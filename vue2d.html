@@ -349,7 +349,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.71</span>
+  <span class="badge-version">v2.72</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -2090,6 +2090,33 @@ function construireVueGraphique(){
       });
     }
   });
+
+  // Même détection de tronc quasi-coïncident que pour le routage local
+  // ci-dessus, appliquée cette fois aux liens routés par la marge (2+
+  // générations d'écart) — les deux systèmes sont indépendants, donc sans
+  // ce partage du même registre (x1DejaUtilises), un lien routé par la
+  // marge pourrait choisir exactement le même x1 qu'un tronc local déjà en
+  // place (ou qu'un autre pont), sans que ni l'un ni l'autre ne le sache.
+  const groupesMarge = new Map(); // clefFratrie -> [connecteur,...]
+  aRouterParMarge.forEach(c => {
+    if (!groupesMarge.has(c.clefFratrie)) groupesMarge.set(c.clefFratrie, []);
+    groupesMarge.get(c.clefFratrie).push(c);
+  });
+  groupesMarge.forEach(groupe => {
+    const c0 = groupe[0];
+    const troncsGap = x1DejaUtilises.get(c0.gapDebut) || [];
+    let x1Ajuste = c0.x1;
+    let tentative = 0;
+    while (troncsGap.some(x => Math.abs(x - x1Ajuste) < DISTANCE_MIN_TRONCS) && tentative < 20) {
+      tentative++;
+      const decalage = (tentative % 2 === 1 ? 1 : -1) * Math.ceil(tentative / 2) * DISTANCE_MIN_TRONCS;
+      x1Ajuste = c0.x1 + decalage;
+    }
+    if (x1Ajuste !== c0.x1) groupe.forEach(c => { c.x1 = x1Ajuste; });
+    troncsGap.push(x1Ajuste);
+    x1DejaUtilises.set(c0.gapDebut, troncsGap);
+  });
+
   const pontsParMarge = [...aRouterParMarge, ...aPromouvoir.map(c => ({ ...c, gapFin: c.gapDebut + 1 }))];
 
   // On calcule dès maintenant la position de canal de chaque pont routé
