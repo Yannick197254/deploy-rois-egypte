@@ -316,7 +316,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.60</span>
+  <span class="badge-version">v2.61</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1489,6 +1489,33 @@ function construireVueGraphique(){
     segmentsHorizontauxParCouloir.get(gap).push({ y, xFrom: Math.min(xFrom,xTo), xTo: Math.max(xFrom,xTo), clefFratrie });
   };
 
+  // Enregistrement PRÉALABLE des liens de mariage dans le système
+  // d'évitement des croisements (segments horizontaux), AVANT le calcul
+  // des liens de fratrie ci-dessous — sans ça, un pont routé par la marge
+  // pourrait choisir un canal qui coupe en plein milieu un lien de
+  // mariage, invisible pour lui puisqu'il n'existait pas encore à ce
+  // stade du calcul (c'est exactement ce qui causait les croisements
+  // observés). La clef commence par "MARIAGE:" pour ne jamais être
+  // confondue avec une vraie clefFratrie.
+  unionsPlacees.forEach(u => {
+    if(u.membres.length === 2){
+      const y = u.y + VG.HAUTEUR_BOITE / 2;
+      const x1 = u.x + VG.LARGEUR_PERSONNE;
+      const x2 = u.x + VG.LARGEUR_PERSONNE + VG.ECART_COUPLE;
+      ajouterSegmentH(u.gen, y, x1, x2, 'MARIAGE:' + u.id);
+    } else if(u.membres.length > 2 && u.anchor){
+      const idxAncre = u.membres.indexOf(u.anchor);
+      const xAncre = u.centreMembre[u.anchor];
+      const { top: topAncre, hauteur: hAncre } = bordsBoiteDe(u, u.anchor);
+      u.membres.forEach((pid, idx) => {
+        if(pid === u.anchor) return;
+        const xConjoint = u.centreMembre[pid];
+        const rang = Math.abs(idx - idxAncre);
+        const yLien = topAncre + hAncre * fractionLienPourConjoint(pid, rang);
+        ajouterSegmentH(u.gen, yLien, xAncre, xConjoint, 'MARIAGE:' + u.id);
+      });
+    }
+  });
 
   const tousConnecteurs = [];
   const filiationDe = new Map(); // enfantId -> {pere, mere}
@@ -1548,7 +1575,14 @@ function construireVueGraphique(){
       // ligne), même si l'un d'eux est par ailleurs individuellement
       // marqué "pont" pour une tout autre raison (ex. son propre mariage).
       const clefFratrie = uidParent + '|' + (fil && fil.pere || '') + '|' + (fil && fil.mere || '');
-      tousConnecteurs.push({ x1, y1, x2, y2, gapDebut: gapDebutReel, gapFin: u.gen, incertain: !!(fil && fil.incertain), estPont: liensEnPointilles.has(m), estPontStructurel: liensEnPointilles.has(m), clefFratrie });
+      // Priorité de traitement : un enfant dont un seul parent est connu ET
+      // que ce parent est un roi (l'autre est inconnu, pas juste hors
+      // limite d'affichage) réserve sa place EN PREMIER parmi les liens
+      // locaux — ainsi ce sont les AUTRES liens qui, le cas échéant,
+      // doivent le contourner plutôt que l'inverse.
+      const prioritaire = (xPere !== undefined && xMere === undefined && fil && !fil.mere && PERSONNES.get(fil.pere)?.role === 'roi')
+        || (xMere !== undefined && xPere === undefined && fil && !fil.pere && PERSONNES.get(fil.mere)?.role === 'roi');
+      tousConnecteurs.push({ x1, y1, x2, y2, gapDebut: gapDebutReel, gapFin: u.gen, incertain: !!(fil && fil.incertain), estPont: liensEnPointilles.has(m), estPontStructurel: liensEnPointilles.has(m), clefFratrie, prioritaire });
     });
   });
 
@@ -1693,7 +1727,8 @@ function construireVueGraphique(){
   // d'écart par construction (l'arbre place systématiquement un enfant
   // 1 génération sous son parent) — seuls les ponts structurels peuvent
   // être plus profonds.
-  const aRouterParMarge = tousConnecteurs.filter(c => c.gapFin - c.gapDebut >= 2);
+  const aRouterParMarge = tousConnecteurs.filter(c => c.gapFin - c.gapDebut >= 2)
+    .sort((a, b) => (a.prioritaire ? 0 : 1) - (b.prioritaire ? 0 : 1));
   const aTraiterLocalement = tousConnecteurs.filter(c => c.gapFin - c.gapDebut < 2);
 
   // Regroupés par fratrie (pas traités individuellement) : des frères et
@@ -1707,9 +1742,14 @@ function construireVueGraphique(){
     if (!groupesFratrie.has(c.clefFratrie)) groupesFratrie.set(c.clefFratrie, []);
     groupesFratrie.get(c.clefFratrie).push(c);
   });
-  // Groupes triés par portée maximale croissante : les fratries les plus
+  // Groupes triés par priorité d'abord (enfant d'un roi à mère inconnue,
+  // voir "prioritaire" ci-dessus — réserve sa place avant les autres),
+  // puis par portée maximale croissante : les fratries les plus
   // "compactes" réservent leur place en premier.
   const groupesOrdonnes = [...groupesFratrie.values()].sort((ga, gb) => {
+    const prioA = ga[0].prioritaire ? 0 : 1;
+    const prioB = gb[0].prioritaire ? 0 : 1;
+    if (prioA !== prioB) return prioA - prioB;
     const spanA = Math.max(...ga.map(c => Math.abs(c.x2 - c.x1)));
     const spanB = Math.max(...gb.map(c => Math.abs(c.x2 - c.x1)));
     return spanA - spanB;
