@@ -349,7 +349,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.74</span>
+  <span class="badge-version">v2.75</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1211,15 +1211,6 @@ function ordonnerEtPositionner(unions, unionParentDe){
       });
     });
     enfantsUnionsPar.set(uParent.id, [...enfantsUnions]);
-    // --- DIAGNOSTIC TEMPORAIRE, à retirer ensuite ---
-    if (uParent.membres.some(m => nomDe(m).indexOf('Touthmosis Ier') === 0)) {
-      console.log('=== DIAGNOSTIC Touthmosis Ier ===');
-      console.log('Membres de son union :', uParent.membres.map(nomDe));
-      console.log('Enfants (ordre de placement), chacun avec ses propres membres :',
-        [...enfantsUnions].map(eid => unions.get(eid).membres.map(nomDe))
-      );
-    }
-    // --- FIN DIAGNOSTIC ---
   });
   // Une même union enfant peut être atteinte par plusieurs personnes
   // différentes issues de CE parent (ex. Touthmosis II ET Hatchepsout,
@@ -1336,7 +1327,23 @@ function ordonnerEtPositionner(unions, unionParentDe){
         }
       }
       placerUnion(eid, xCible, gen + 1);
-      xEnfant = unions.get(eid).x + largeurUnion(eid) + VG.ECART_UNION;
+      // Le frère/sœur suivant démarre juste après le bord droit RÉEL de la
+      // rangée visible de cet enfant (lui + son propre conjoint le cas
+      // échéant), pas après toute la largeur récursive réservée pour SA
+      // descendance (largeurUnion) — cette largeur supplémentaire ne sert
+      // qu'à centrer ses propres petits-enfants sous lui, à une génération
+      // qui n'a de toute façon aucun rapport horizontal avec la fratrie
+      // courante (générations différentes = jamais de collision visuelle
+      // entre les deux). Sans ce correctif, un enfant marié dans une union
+      // à la descendance très large repousse inutilement loin le
+      // frère/sœur suivant, même si ce dernier n'a lui-même besoin que
+      // d'une petite place. Risque résiduel, rare en pratique : si CE
+      // frère/sœur suivant a lui-même des descendants qui atteignent
+      // exactement la même génération que celle qui rendait l'enfant
+      // précédent si large, un chevauchement entre ces 2 branches
+      // éloignées reste possible.
+      const uEnfantPlace = unions.get(eid);
+      xEnfant = uEnfantPlace.x + largeurPropreUnion(uEnfantPlace) + VG.ECART_UNION;
     });
   }
 
