@@ -349,7 +349,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.69</span>
+  <span class="badge-version">v2.70</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1676,7 +1676,25 @@ function construireVueGraphique(){
   const liensEnPointilles = new Set([...membreNonPorteurPont.values(), ...membresNonPorteurGeneralise]);
 
   // Hauteur du haut/bas de chaque "couloir" entre génération g et g+1.
-  const hautCouloir = g => VG.MARGE + g * VG.HAUTEUR_LIGNE + VG.HAUTEUR_BOITE;
+  // Le "haut" ne peut pas se contenter de la hauteur NOMINALE d'une
+  // vignette (VG.HAUTEUR_BOITE) : une vignette royale déborde bien plus
+  // bas (voir topBoiteDecalee) — sans ça, la voie de routage des liens de
+  // fratrie/pont tombait dedans et se faisait recouvrir. On calcule donc,
+  // pour chaque génération, le bas réel le plus profond parmi toutes les
+  // vignettes qui s'y trouvent, et on part de là (avec une petite marge).
+  const basMaxParGeneration = new Map();
+  unionsPlacees.forEach(u => {
+    u.membres.forEach(m => {
+      const bas = bordsBoiteDe(u, m).bottom;
+      if(!basMaxParGeneration.has(u.gen) || bas > basMaxParGeneration.get(u.gen)){
+        basMaxParGeneration.set(u.gen, bas);
+      }
+    });
+  });
+  const hautCouloir = g => Math.max(
+    VG.MARGE + g * VG.HAUTEUR_LIGNE + VG.HAUTEUR_BOITE,
+    (basMaxParGeneration.get(g) ?? -Infinity) + 8
+  );
   const basCouloir = g => VG.MARGE + (g + 1) * VG.HAUTEUR_LIGNE;
   const FRACTION_VOIE_NORMALE = 0.5;
   const FRACTION_VOIE_PONT = 0.72; // voie dédiée, plus basse, pour les liens en pointillés
