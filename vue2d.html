@@ -316,7 +316,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.61</span>
+  <span class="badge-version">v2.62</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -874,6 +874,18 @@ function hauteurLienDeMariage(union, monId, autreId){
     const idxAutre = union.membres.indexOf(autreId);
     const rang = Math.abs(idxAutre - idxAncre);
     return topAncre + hAncre * fractionLienPourConjoint(autreId, rang);
+  }
+  if(union.membres.length === 2 && !union.anchor){
+    // Couple simple (une seule épouse) : si l'un des deux est roi, le
+    // lien de mariage (voir rendu des connecteurs) est au 1er palier
+    // (10%) de SA vignette, pas au centre — il faut donc que la fratrie
+    // vise cette même hauteur, pas bordsBoiteDe(...).centre (50%).
+    const roiId = union.membres.find(pid => PERSONNES.get(pid)?.role === 'roi');
+    if(roiId !== undefined){
+      const centre = union.y + VG.HAUTEUR_BOITE / 2;
+      const hRoi = hauteurBoiteDe(roiId);
+      return (centre - hRoi / 2) + hRoi * PALIERS_LIEN_ROI[0];
+    }
   }
   return bordsBoiteDe(union, monId).centre;
 }
@@ -1502,7 +1514,11 @@ function construireVueGraphique(){
       const y = u.y + VG.HAUTEUR_BOITE / 2;
       const x1 = u.x + VG.LARGEUR_PERSONNE;
       const x2 = u.x + VG.LARGEUR_PERSONNE + VG.ECART_COUPLE;
-      ajouterSegmentH(u.gen, y, x1, x2, 'MARIAGE:' + u.id);
+      const roiId = u.membres.find(pid => PERSONNES.get(pid)?.role === 'roi');
+      const yLien = roiId !== undefined
+        ? (y - hauteurBoiteDe(roiId) / 2) + hauteurBoiteDe(roiId) * PALIERS_LIEN_ROI[0]
+        : y;
+      ajouterSegmentH(u.gen, yLien, x1, x2, 'MARIAGE:' + u.id);
     } else if(u.membres.length > 2 && u.anchor){
       const idxAncre = u.membres.indexOf(u.anchor);
       const xAncre = u.centreMembre[u.anchor];
@@ -1883,10 +1899,18 @@ function construireVueGraphique(){
   unionsPlacees.forEach(u => {
     const y = u.y + VG.HAUTEUR_BOITE / 2;
     if(u.membres.length === 2){
-      // Cas classique : couple simple, trait droit entre les 2 boîtes adjacentes.
+      // Cas classique : couple simple, trait droit entre les 2 boîtes
+      // adjacentes. Si l'un des deux est un roi, le lien s'accroche quand
+      // même au 1er palier (10% de la hauteur de SA vignette depuis le
+      // haut), comme pour tous les autres mariages royaux — la règle des
+      // paliers ne doit pas dépendre du nombre d'épouses.
       const x1 = u.x + VG.LARGEUR_PERSONNE;
       const x2 = u.x + VG.LARGEUR_PERSONNE + VG.ECART_COUPLE;
-      svg.appendChild(creer('line', { class:'lien-mariage', x1, y1:y, x2, y2:y }));
+      const roiId = u.membres.find(pid => PERSONNES.get(pid)?.role === 'roi');
+      const yLien = roiId !== undefined
+        ? (y - hauteurBoiteDe(roiId) / 2) + hauteurBoiteDe(roiId) * PALIERS_LIEN_ROI[0]
+        : y;
+      svg.appendChild(creer('line', { class:'lien-mariage', x1, y1:yLien, x2, y2:yLien }));
       return;
     }
     if(u.membres.length > 2 && u.anchor){
