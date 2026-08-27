@@ -1211,6 +1211,16 @@ function ordonnerEtPositionner(unions, unionParentDe){
       });
     });
     enfantsUnionsPar.set(uParent.id, [...enfantsUnions]);
+    // --- DIAGNOSTIC TEMPORAIRE, à retirer ensuite ---
+    if (uParent.membres.some(m => nomDe(m) === 'Touthmosis Ier' || nomDe(m) === 'Touthmosis Ier ')) {
+      console.log('=== DIAGNOSTIC Touthmosis Ier ===');
+      console.log('Membres de son union :', uParent.membres.map(nomDe));
+      console.log('Enfants (ordre de largeurUnion/placement) :', [...enfantsUnions].map(eid => {
+        const u = unions.get(eid);
+        return { enfants_de_cette_union: u.membres.map(nomDe), largeur: largeurUnion(eid) };
+      }));
+    }
+    // --- FIN DIAGNOSTIC ---
   });
   // Une même union enfant peut être atteinte par plusieurs personnes
   // différentes issues de CE parent (ex. Touthmosis II ET Hatchepsout,
