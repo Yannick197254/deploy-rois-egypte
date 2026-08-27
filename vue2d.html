@@ -349,7 +349,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.68</span>
+  <span class="badge-version">v2.69</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -940,6 +940,23 @@ function hauteurLienDeMariage(union, monId, autreId){
     const idxAutre = union.membres.indexOf(autreId);
     const rang = Math.abs(idxAutre - idxAncre);
     return topAncre + hAncre * fractionLienPourConjoint(autreId, rang);
+  }
+  if(union.anchor && union.anchor !== monId && union.membres.includes(monId)){
+    // "monId" est un conjoint (pas l'ancre) d'une union fusionnée — ex.
+    // Hatchepsout, épouse de Touthmosis II. Pour une épouse "normale", ça
+    // correspond déjà au centre de sa vignette (bordsBoiteDe le calcule
+    // pareil) ; mais pour une épouse elle-même roi (cas particulier, voir
+    // fractionLienPourConjoint), sa vignette est bien plus grande que son
+    // vrai palier — sans ce calcul explicite, le lien de fratrie partirait
+    // du centre de cette immense vignette, en plein milieu, au lieu du
+    // palier réel du lien de mariage, et se ferait donc recouvrir.
+    const centreLigne = union.y + VG.HAUTEUR_BOITE / 2;
+    const hAncre = hauteurBoiteDe(union.anchor);
+    const topAncre = topBoiteDecalee(centreLigne, hAncre);
+    const idxAncre = union.membres.indexOf(union.anchor);
+    const idxMoi = union.membres.indexOf(monId);
+    const rang = Math.abs(idxMoi - idxAncre);
+    return topAncre + hAncre * fractionLienPourConjoint(monId, rang);
   }
   if(union.membres.length === 2 && !union.anchor){
     // Couple simple (une seule épouse) : si "monId" est un roi, le lien de
