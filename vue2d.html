@@ -349,7 +349,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.70</span>
+  <span class="badge-version">v2.71</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -2020,8 +2020,31 @@ function construireVueGraphique(){
 
   const aPromouvoir = [];
   const traitesLocalement = [];
+  // Évite que 2 troncs de fratries DIFFÉRENTES (parents différents) se
+  // chevauchent verticalement sur une portion commune simplement parce
+  // que leurs 2 parents ont, par coïncidence, un x moyen très proche (ex.
+  // un même père partagé entre 2 mariages, dont les 2 épouses sont
+  // chacune approximativement du même côté de l'écran). L'évitement
+  // horizontal existant ne détecte pas ce cas précis (c'est 2 TRONCS
+  // VERTICAUX qui se recouvrent, pas un jog horizontal qui en croise un
+  // autre) — quitte, comme demandé, à ne plus retomber pile au centre de
+  // la largeur de l'enfant dans ce cas.
+  const x1DejaUtilises = new Map(); // gap -> [x1, ...]
+  const DISTANCE_MIN_TRONCS = 14;
   groupesOrdonnes.forEach(groupe => {
     const c0 = groupe[0];
+    const troncsGap = x1DejaUtilises.get(c0.gapDebut) || [];
+    let x1Ajuste = c0.x1;
+    let tentative = 0;
+    while (troncsGap.some(x => Math.abs(x - x1Ajuste) < DISTANCE_MIN_TRONCS) && tentative < 20) {
+      tentative++;
+      const decalage = (tentative % 2 === 1 ? 1 : -1) * Math.ceil(tentative / 2) * DISTANCE_MIN_TRONCS;
+      x1Ajuste = c0.x1 + decalage;
+    }
+    if (x1Ajuste !== c0.x1) groupe.forEach(c => { c.x1 = x1Ajuste; });
+    troncsGap.push(x1Ajuste);
+    x1DejaUtilises.set(c0.gapDebut, troncsGap);
+
     const fractionParDefaut = c0.estPont ? FRACTION_VOIE_PONT : FRACTION_VOIE_NORMALE;
     const fractionMax = c0.estPont ? 0.9 : 0.82;
     const xMinGroupe = Math.min(c0.x1, ...groupe.map(c => c.x2));
