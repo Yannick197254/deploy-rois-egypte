@@ -316,7 +316,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.63</span>
+  <span class="badge-version">v2.64</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -789,7 +789,7 @@ const VG = {
   ECART_COUPLE: 94.35,
   ECART_UNION: 36,
   ECART_RACINES: 90,
-  HAUTEUR_LIGNE: 330,
+  HAUTEUR_LIGNE: 380,
   MARGE: 50,
 };
 
@@ -829,17 +829,32 @@ function fractionLienPourConjoint(pid, rang){
   return (p && p.role === 'roi') ? PALIERS_LIEN_ROI[0] : fractionLienRoi(rang);
 }
 
+// Le HAUT réel de la vignette d'un roi (ou de l'ancre d'une union
+// polygame) : décalée vers le bas de sorte que son 1er palier (10%)
+// coïncide exactement avec la ligne de génération partagée (là où les
+// épouses "normales" sont centrées) — le lien de mariage direct (1re/2e
+// épouse) devient donc toujours parfaitement horizontal par construction,
+// et la vignette déborde surtout vers le bas plutôt que vers le haut :
+// elle ne chevauche plus le lien de fratrie qui arrive d'en haut.
+function topBoiteDecalee(centreLigne, hauteur){
+  return centreLigne - hauteur * PALIERS_LIEN_ROI[0];
+}
+
 function bordsBoiteDe(u, pid){
   const h = hauteurBoiteDe(pid);
+  const centreLigne = u.y + VG.HAUTEUR_BOITE / 2;
+  const pMoi = PERSONNES.get(pid);
+  const estRoi = !!(pMoi && pMoi.role === 'roi');
   if(u.anchor && pid !== u.anchor){
-    const centreAncre = u.y + VG.HAUTEUR_BOITE / 2;
-    const pConjoint = PERSONNES.get(pid);
-    if(pConjoint && pConjoint.role === 'roi'){
+    if(estRoi){
       // Conjoint lui/elle-même roi (ex. Hatchepsout) : vignette alignée
-      // exactement sur celle de l'ancre (même centre, donc même hauteur
-      // à l'écran), pas décalée par palier — seul le LIEN de mariage
-      // reste ancré au 1er palier (10%), voir plus bas dans le rendu
-      // des connecteurs (fractionLienPourConjoint).
+      // exactement sur celle de l'ancre (même décalage, même centre, donc
+      // même hauteur à l'écran), pas décalée par palier — seul le LIEN de
+      // mariage reste ancré au 1er palier (10%), voir plus bas dans le
+      // rendu des connecteurs (fractionLienPourConjoint).
+      const hAncre = hauteurBoiteDe(u.anchor);
+      const topAncre = topBoiteDecalee(centreLigne, hAncre);
+      const centreAncre = topAncre + hAncre / 2;
       return { top: centreAncre - h / 2, bottom: centreAncre + h / 2, centre: centreAncre, hauteur: h };
     }
     // Conjoint "normal" d'une union polygame (ex. épouse d'un roi) : sa
@@ -847,15 +862,18 @@ function bordsBoiteDe(u, pid){
     // rang, plutôt que sur la ligne médiane commune de la génération —
     // pour un effet d'éventail qui suit visuellement les liens de mariage.
     const hAncre = hauteurBoiteDe(u.anchor);
-    const topAncre = centreAncre - hAncre / 2;
+    const topAncre = topBoiteDecalee(centreLigne, hAncre);
     const idxAncre = u.membres.indexOf(u.anchor);
     const idxPid = u.membres.indexOf(pid);
     const rang = Math.abs(idxPid - idxAncre);
     const centre = topAncre + hAncre * fractionLienRoi(rang);
     return { top: centre - h / 2, bottom: centre + h / 2, centre, hauteur: h };
   }
-  const centre = u.y + VG.HAUTEUR_BOITE / 2;
-  return { top: centre - h / 2, bottom: centre + h / 2, centre, hauteur: h };
+  if(estRoi){
+    const top = topBoiteDecalee(centreLigne, h);
+    return { top, bottom: top + h, centre: top + h / 2, hauteur: h };
+  }
+  return { top: centreLigne - h / 2, bottom: centreLigne + h / 2, centre: centreLigne, hauteur: h };
 }
 
 // Hauteur EXACTE à laquelle le lien de mariage touche "monId", pour son
@@ -867,9 +885,9 @@ function bordsBoiteDe(u, pid){
 // de sa vignette est déjà correct (bordsBoiteDe gère ce cas).
 function hauteurLienDeMariage(union, monId, autreId){
   if(union.anchor === monId && autreId !== undefined && union.membres.includes(autreId)){
-    const centreAncre = union.y + VG.HAUTEUR_BOITE / 2;
+    const centreLigne = union.y + VG.HAUTEUR_BOITE / 2;
     const hAncre = hauteurBoiteDe(monId);
-    const topAncre = centreAncre - hAncre / 2;
+    const topAncre = topBoiteDecalee(centreLigne, hAncre);
     const idxAncre = union.membres.indexOf(monId);
     const idxAutre = union.membres.indexOf(autreId);
     const rang = Math.abs(idxAutre - idxAncre);
@@ -877,14 +895,13 @@ function hauteurLienDeMariage(union, monId, autreId){
   }
   if(union.membres.length === 2 && !union.anchor){
     // Couple simple (une seule épouse) : si "monId" est un roi, le lien de
-    // mariage (voir rendu des connecteurs) s'accroche à SON 1er palier
-    // (10%) — mais uniquement pour lui ; l'épouse, elle, reste au centre
-    // de sa propre vignette (déjà géré par bordsBoiteDe ci-dessous).
+    // mariage s'accroche à SON 1er palier (10%) — qui, grâce au décalage
+    // de topBoiteDecalee, coïncide toujours exactement avec la ligne
+    // partagée ; l'épouse, elle, reste au centre de sa propre vignette
+    // (déjà géré par bordsBoiteDe ci-dessous).
     const pMon = PERSONNES.get(monId);
     if(pMon && pMon.role === 'roi'){
-      const centre = union.y + VG.HAUTEUR_BOITE / 2;
-      const hRoi = hauteurBoiteDe(monId);
-      return (centre - hRoi / 2) + hRoi * PALIERS_LIEN_ROI[0];
+      return union.y + VG.HAUTEUR_BOITE / 2;
     }
   }
   return bordsBoiteDe(union, monId).centre;
@@ -1514,15 +1531,10 @@ function construireVueGraphique(){
       const y = u.y + VG.HAUTEUR_BOITE / 2;
       const x1 = u.x + VG.LARGEUR_PERSONNE;
       const x2 = u.x + VG.LARGEUR_PERSONNE + VG.ECART_COUPLE;
-      const roiId = u.membres.find(pid => PERSONNES.get(pid)?.role === 'roi');
-      // Le trait n'est pas forcément horizontal (voir rendu des
-      // connecteurs) ; pour l'évitement des croisements, on retient la
-      // hauteur côté roi (près du haut de sa grande vignette), là où un
-      // pont a le plus de chances de passer à proximité.
-      const yLien = roiId !== undefined
-        ? (y - hauteurBoiteDe(roiId) / 2) + hauteurBoiteDe(roiId) * PALIERS_LIEN_ROI[0]
-        : y;
-      ajouterSegmentH(u.gen, yLien, x1, x2, 'MARIAGE:' + u.id);
+      // Le trait est maintenant toujours horizontal (voir topBoiteDecalee
+      // ci-dessus) : que l'un des deux soit roi ou non, la hauteur du
+      // lien reste "y" — inutile de la recalculer différemment.
+      ajouterSegmentH(u.gen, y, x1, x2, 'MARIAGE:' + u.id);
     } else if(u.membres.length > 2 && u.anchor){
       const idxAncre = u.membres.indexOf(u.anchor);
       const xAncre = u.centreMembre[u.anchor];
@@ -1904,19 +1916,13 @@ function construireVueGraphique(){
     const y = u.y + VG.HAUTEUR_BOITE / 2;
     if(u.membres.length === 2){
       // Cas classique : couple simple, trait entre les 2 boîtes adjacentes.
-      // Si l'un des deux est un roi, SEUL son bout du trait s'accroche au
-      // 1er palier (10% de la hauteur de SA vignette) ; l'autre bout
-      // (l'épouse) reste au centre de sa propre vignette — le trait n'est
-      // donc pas forcément horizontal.
+      // Grâce au décalage de la vignette royale (voir topBoiteDecalee),
+      // le 1er palier (10%) du roi coïncide toujours exactement avec la
+      // ligne partagée "y" — le trait est donc toujours horizontal, que
+      // l'un des deux soit roi ou non.
       const x1 = u.x + VG.LARGEUR_PERSONNE;
       const x2 = u.x + VG.LARGEUR_PERSONNE + VG.ECART_COUPLE;
-      const roiId = u.membres.find(pid => PERSONNES.get(pid)?.role === 'roi');
-      const yPalierRoi = roiId !== undefined
-        ? (y - hauteurBoiteDe(roiId) / 2) + hauteurBoiteDe(roiId) * PALIERS_LIEN_ROI[0]
-        : y;
-      const y1 = (roiId !== undefined && u.membres[0] === roiId) ? yPalierRoi : y;
-      const y2 = (roiId !== undefined && u.membres[1] === roiId) ? yPalierRoi : y;
-      svg.appendChild(creer('line', { class:'lien-mariage', x1, y1, x2, y2 }));
+      svg.appendChild(creer('line', { class:'lien-mariage', x1, y1:y, x2, y2:y }));
       return;
     }
     if(u.membres.length > 2 && u.anchor){
