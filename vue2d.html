@@ -316,7 +316,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.56</span>
+  <span class="badge-version">v2.57</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -820,6 +820,14 @@ function fractionLienRoi(rang){ // rang = 1 pour le conjoint adjacent à l'ancre
   if(idx < PALIERS_LIEN_ROI.length) return PALIERS_LIEN_ROI[idx];
   return Math.min(0.95, PALIERS_LIEN_ROI[PALIERS_LIEN_ROI.length - 1] + (idx - PALIERS_LIEN_ROI.length + 1) * 0.15);
 }
+// Cas particulier : un conjoint qui est lui/elle-même "roi" (ex. Hatchepsout,
+// épouse ET pharaon) se place toujours au 1er palier (10%), quel que soit
+// son rang réel parmi les épouses — sa vignette, tout aussi grande que
+// celle de l'ancre, se retrouve donc à la même hauteur que la sienne.
+function fractionLienPourConjoint(pid, rang){
+  const p = PERSONNES.get(pid);
+  return (p && p.role === 'roi') ? PALIERS_LIEN_ROI[0] : fractionLienRoi(rang);
+}
 
 function bordsBoiteDe(u, pid){
   const h = hauteurBoiteDe(pid);
@@ -834,7 +842,7 @@ function bordsBoiteDe(u, pid){
     const idxAncre = u.membres.indexOf(u.anchor);
     const idxPid = u.membres.indexOf(pid);
     const rang = Math.abs(idxPid - idxAncre);
-    const centre = topAncre + hAncre * fractionLienRoi(rang);
+    const centre = topAncre + hAncre * fractionLienPourConjoint(pid, rang);
     return { top: centre - h / 2, bottom: centre + h / 2, centre, hauteur: h };
   }
   const centre = u.y + VG.HAUTEUR_BOITE / 2;
@@ -1825,7 +1833,7 @@ function construireVueGraphique(){
         if(pid === u.anchor) return;
         const xConjoint = u.centreMembre[pid];
         const rang = Math.abs(idx - idxAncre);
-        const yAncre = topAncre + hAncre * fractionLienRoi(rang);
+        const yAncre = topAncre + hAncre * fractionLienPourConjoint(pid, rang);
         const yConjoint = bordsBoiteDe(u, pid).centre;
         const mariageCorrespondant = MARIAGES.find(m =>
           (m.p1 === u.anchor && m.p2 === pid) || (m.p1 === pid && m.p2 === u.anchor)
