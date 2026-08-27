@@ -349,7 +349,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.72</span>
+  <span class="badge-version">v2.74</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1804,7 +1804,18 @@ function construireVueGraphique(){
           : uParent.y + VG.HAUTEUR_BOITE;
       }
       const gapDebutReel = Math.max(uParentPere ? uParentPere.gen : uParent.gen, uParentMere ? uParentMere.gen : uParent.gen);
-      const x2 = u.centreMembre[m];
+      const centreX2 = u.centreMembre[m];
+      // Le lien n'arrive plus pile au centre de la vignette de l'enfant :
+      // il se décale d'1/4 de sa largeur vers le côté d'où vient le
+      // tronc (x1) — ça évite que 2 troncs de demi-frères/soeurs
+      // symétriques par rapport à leur parent commun (mariés entre eux,
+      // vignettes adjacentes) ne se chevauchent sur une plage commune,
+      // tout en gardant la symétrie générale de la mise en page (contrairement
+      // à un décalage de toute une union, plus intrusif).
+      const largeurEnfant = largeurBoiteDe(m);
+      const x2 = x1 > centreX2 ? centreX2 + largeurEnfant / 4
+        : x1 < centreX2 ? centreX2 - largeurEnfant / 4
+        : centreX2;
       const y2 = bordsBoiteDe(u, m).top;
       // estPont : soit détecté structurellement (remariage classique, union
       // à 2 membres), soit — cas non couvert par cette détection, ex. une
