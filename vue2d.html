@@ -339,7 +339,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.65</span>
+  <span class="badge-version">v2.66</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -355,10 +355,10 @@ create policy "Accès complet filiations" on filiations
     <datalist id="listeRechercheVG"></datalist>
     <span id="rechercheVG-status" class="statut-recherche"></span>
   </div>
-  <button id="btnMasquerEntete" class="link-btn" onclick="basculerEntete()" title="Masquer l'en-tête (utile sur mobile)">🔼 Masquer l'en-tête</button>
+  <button id="btnMasquerEntete" class="link-btn" onclick="basculerEntete()" title="Plein écran (masque aussi la barre d'adresse et les onglets sur mobile)">⛶ Plein écran</button>
 </header>
 
-<button id="btnRouvrirEntete" onclick="basculerEntete()" title="Afficher l'en-tête">🔽</button>
+<button id="btnRouvrirEntete" onclick="basculerEntete()" title="Quitter le plein écran">🔽</button>
 
 <div id="zoneCanevas">
   <div id="messageZone" class="chargement">Chargement de l'arbre…</div>
@@ -1530,10 +1530,36 @@ function rechercherEtCentrer(){
 }
 window.rechercherEtCentrer = rechercherEtCentrer;
 
+function estEnPleinEcran(){
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
 function basculerEntete(){
-  document.body.classList.toggle('entete-masquee');
+  if(!estEnPleinEcran()){
+    document.body.classList.add('entete-masquee');
+    // La Fullscreen API masque en plus la barre d'adresse, les onglets,
+    // etc. — pas seulement notre en-tête à nous. Si elle n'est pas
+    // disponible ou refusée (ex. anciens iOS), le masquage CSS ci-dessus
+    // reste actif seul, en repli.
+    const demande = document.documentElement.requestFullscreen
+      ? document.documentElement.requestFullscreen()
+      : (document.documentElement.webkitRequestFullscreen ? document.documentElement.webkitRequestFullscreen() : null);
+    if(demande && demande.catch) demande.catch(() => {});
+  } else {
+    if(document.exitFullscreen) document.exitFullscreen();
+    else if(document.webkitExitFullscreen) document.webkitExitFullscreen();
+    document.body.classList.remove('entete-masquee');
+  }
 }
 window.basculerEntete = basculerEntete;
+// Si le plein écran est quitté autrement que par notre bouton (touche
+// Échap, geste retour du navigateur...), on resynchronise l'affichage de
+// l'en-tête pour ne pas rester bloqué sans lui.
+document.addEventListener('fullscreenchange', () => {
+  if(!document.fullscreenElement) document.body.classList.remove('entete-masquee');
+});
+document.addEventListener('webkitfullscreenchange', () => {
+  if(!document.webkitFullscreenElement) document.body.classList.remove('entete-masquee');
+});
 
 function construireVueGraphique(){
   GENERATIONS_VG = calculerGenerations();
