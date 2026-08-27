@@ -44,6 +44,29 @@
   .bascule-vue button.actif{ background:var(--bleu); color:#fff; border-color:var(--bleu); }
 
   #zoneCanevas{ height:calc(100vh - 54px); position:relative; overflow:auto; }
+
+  .bloc-recherche{ display:flex; align-items:center; gap:0.4rem; }
+  .bloc-recherche input{
+    border:1px solid var(--bordure); border-radius:5px; padding:0.4rem 0.6rem;
+    font-size:0.85rem; width:200px; max-width:40vw;
+  }
+  .statut-recherche{ font-size:0.75rem; color:#9a6b1a; }
+
+  /* Bouton flottant permanent (hors du header) pour rouvrir l'en-tête
+     une fois masqué — sans lui, impossible de le faire revenir. Caché
+     tant que l'en-tête est visible. */
+  #btnRouvrirEntete{
+    display:none; position:fixed; top:6px; right:6px; z-index:50;
+    border:1px solid var(--bordure); background:var(--panneau); color:var(--texte);
+    border-radius:50%; width:34px; height:34px; font-size:1rem; cursor:pointer;
+    box-shadow:0 1px 4px rgba(0,0,0,0.15);
+  }
+  /* Masquage complet de l'en-tête (utile sur mobile où il occupe une
+     grande partie de l'écran une fois replié sur plusieurs lignes) :
+     le canevas reprend toute la hauteur, et le bouton flottant apparaît. */
+  body.entete-masquee header.barre-app{ display:none; }
+  body.entete-masquee #zoneCanevas{ height:100vh; }
+  body.entete-masquee #btnRouvrirEntete{ display:block; }
   #FamilyChart{ width:100%; height:100%; background:var(--fond); }
   #vueGraphique{ display:none; background:var(--fond); }
   #vueGraphiqueNote{ display:none; padding:0.5rem 1rem; font-size:0.8rem; color:#9a6b1a; background:#fdf3e3; border-bottom:1px solid #f0dfb5; }
@@ -316,7 +339,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.64</span>
+  <span class="badge-version">v2.65</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -326,7 +349,16 @@ create policy "Accès complet filiations" on filiations
     <button id="btnVueGraphique" class="actif">Vue graphique</button>
     <button id="btnVueEnsemble">Vue d'ensemble</button>
   </div>
+  <div class="bloc-recherche">
+    <input type="text" id="rechercheVG" list="listeRechercheVG" placeholder="🔍 Rechercher une personne…"
+      onchange="rechercherEtCentrer()" onkeydown="if(event.key==='Enter') rechercherEtCentrer()">
+    <datalist id="listeRechercheVG"></datalist>
+    <span id="rechercheVG-status" class="statut-recherche"></span>
+  </div>
+  <button id="btnMasquerEntete" class="link-btn" onclick="basculerEntete()" title="Masquer l'en-tête (utile sur mobile)">🔼 Masquer l'en-tête</button>
 </header>
+
+<button id="btnRouvrirEntete" onclick="basculerEntete()" title="Afficher l'en-tête">🔽</button>
 
 <div id="zoneCanevas">
   <div id="messageZone" class="chargement">Chargement de l'arbre…</div>
@@ -1439,6 +1471,10 @@ let personToUnionsGlobal = new Map();
 // ============================================================
 // Recentrage de la vue au clic sur une personne (vue graphique SVG)
 // ============================================================
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 function centrerSurPersonne(x, y){
   const zone = document.getElementById('zoneCanevas');
   zone.scrollTo({
@@ -1447,6 +1483,57 @@ function centrerSurPersonne(x, y){
     behavior: 'smooth'
   });
 }
+
+// Recherche d'une personne dans la Vue graphique : id -> {x, y} de sa
+// vignette (reconstruite à chaque tracé de la vue, voir fin de
+// construireVueGraphique). labelRechercheVG associe le libellé affiché
+// dans la liste déroulante (avec dates pour distinguer les homonymes) à
+// l'id de la personne, puisque le <datalist> ne renvoie que du texte.
+const positionsRechercheVG = new Map();
+const labelRechercheVG = new Map();
+function remplirListeRecherche(){
+  labelRechercheVG.clear();
+  const dl = document.getElementById('listeRechercheVG');
+  if(!dl) return;
+  const libelle = id => {
+    const p = PERSONNES.get(id);
+    if(!p) return '?';
+    const dates = [p.regne_debut, p.regne_fin].filter(Boolean).join('–');
+    return dates ? nomDe(id) + ' (' + dates + ')' : nomDe(id);
+  };
+  const ids = [...PERSONNES.keys()].sort((a,b) => nomDe(a).localeCompare(nomDe(b), 'fr', { sensitivity:'base' }));
+  dl.innerHTML = ids.map(id => {
+    const label = libelle(id);
+    labelRechercheVG.set(label, id);
+    return '<option value="' + escapeHtml(label) + '">';
+  }).join('');
+}
+
+function rechercherEtCentrer(){
+  const champ = document.getElementById('rechercheVG');
+  const valeur = champ.value.trim();
+  const id = labelRechercheVG.get(valeur);
+  const statut = document.getElementById('rechercheVG-status');
+  if(!id){
+    if(statut) statut.textContent = valeur ? 'Choisissez un nom dans la liste.' : '';
+    return;
+  }
+  if(!document.getElementById('btnVueGraphique').classList.contains('actif')) basculerVue('graphique');
+  const pos = positionsRechercheVG.get(id);
+  if(pos){
+    centrerSurPersonne(pos.x, pos.y);
+    if(statut) statut.textContent = '';
+  } else if(statut){
+    statut.textContent = nomDe(id) + ' n\'est pas affiché(e) actuellement (hors limite d\'affichage).';
+  }
+  champ.blur();
+}
+window.rechercherEtCentrer = rechercherEtCentrer;
+
+function basculerEntete(){
+  document.body.classList.toggle('entete-masquee');
+}
+window.basculerEntete = basculerEntete;
 
 function construireVueGraphique(){
   GENERATIONS_VG = calculerGenerations();
@@ -1997,6 +2084,19 @@ function construireVueGraphique(){
       svg.appendChild(groupe);
     });
   });
+
+  // Carte des positions (pour la recherche) + remplissage de la liste
+  // déroulante — reconstruites à chaque (re)tracé de la vue graphique,
+  // puisque les positions peuvent changer.
+  positionsRechercheVG.clear();
+  unionsPlacees.forEach(u => {
+    u.membres.forEach(m => {
+      const cx = u.centreMembre[m];
+      const { centre: cy } = bordsBoiteDe(u, m);
+      positionsRechercheVG.set(m, { x: cx, y: cy });
+    });
+  });
+  remplirListeRecherche();
 }
 
 // ============================================================
