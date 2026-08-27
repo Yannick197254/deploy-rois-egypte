@@ -349,7 +349,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.76</span>
+  <span class="badge-version">v2.77</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -2095,25 +2095,50 @@ function construireVueGraphique(){
     }
 
 
+    // Vérifie qu'aucun autre tronc (d'une AUTRE fratrie) n'occupe déjà
+    // une position verticale donnée sur cette plage de hauteur — sert à
+    // la fois à décider si "traitDirect" (ligne verticale simple à x1)
+    // est sûr, et, sinon, à choisir une position d'arrivée alternative.
+    const positionVerticaleLibre = (gap, xCandidat, yFrom, yTo, clefFratrieActuelle) =>
+      !(segmentsVerticauxParCouloir.get(gap) || []).some(s =>
+        s.yFrom < yTo + 6 && yFrom - 6 < s.yTo && Math.abs(s.x - xCandidat) < 10 && s.clefFratrie !== clefFratrieActuelle);
+
     if (!propre) {
       groupe.forEach(c => aPromouvoir.push(c));
-    } else if (groupe.length === 1 && Math.abs(c0.x1 - c0.x2) <= VG.LARGEUR_PERSONNE / 2) {
+    } else if (groupe.length === 1 && Math.abs(c0.x1 - c0.x2) <= VG.LARGEUR_PERSONNE / 2
+        && positionVerticaleLibre(c0.gapDebut, c0.x1, c0.y1, c0.y2, c0.clefFratrie)) {
       // Enfant unique dont le parent tombe déjà dans l'emprise de sa case
       // (pas forcément centré — atterrir dans le tiers gauche ou droit
       // suffit) : un simple trait vertical direct plutôt que le décroché
       // habituel, pour ne pas donner l'illusion trompeuse d'un tronc
       // partagé avec une fratrie voisine qui rejoindrait la même hauteur.
+      // Uniquement si cette ligne (à x1) ne chevauche pas déjà un autre
+      // tronc — sinon, on bascule sur le décroché ci-dessous, seul à
+      // pouvoir viser un point d'arrivée différent (x2), puisque le trait
+      // direct suit x1 sur toute sa longueur.
       traitesLocalement.push({ ...c0, laneY: c0.y2, traitDirect: true });
       ajouterSegment(c0.gapDebut, c0.x1, c0.y1, c0.y2, c0.clefFratrie);
     } else {
       // Gardé sur sa voie locale : on enregistre tout de suite l'empreinte
       // de chaque enfant (2 verticaux + 1 horizontal), pour que le
       // prochain groupe traité dans ce même couloir en tienne compte.
+      // Le point d'arrivée (x2) est lui-même vérifié et, si besoin,
+      // déplacé par paliers de 1/4 de la largeur de la vignette (centre,
+      // 1/4 gauche, 1/4 droit, puis près des bords) jusqu'à trouver une
+      // position libre — toujours en contact avec la vignette.
       groupe.forEach(c => {
-        traitesLocalement.push({ ...c, laneY });
+        let x2Final = c.x2;
+        if (c.centreX2 !== undefined && c.largeurEnfant !== undefined
+            && !positionVerticaleLibre(c.gapDebut, c.x2, laneY, c.y2, c.clefFratrie)) {
+          const candidats = [c.centreX2, c.centreX2 - c.largeurEnfant / 4, c.centreX2 + c.largeurEnfant / 4,
+            c.centreX2 - c.largeurEnfant / 2 + 2, c.centreX2 + c.largeurEnfant / 2 - 2];
+          const libre = candidats.find(xEssai => positionVerticaleLibre(c.gapDebut, xEssai, laneY, c.y2, c.clefFratrie));
+          if (libre !== undefined) x2Final = libre;
+        }
+        traitesLocalement.push({ ...c, x2: x2Final, laneY });
         ajouterSegment(c.gapDebut, c.x1, c.y1, laneY, c.clefFratrie);
-        ajouterSegment(c.gapDebut, c.x2, laneY, c.y2, c.clefFratrie);
-        ajouterSegmentH(c.gapDebut, laneY, c.x1, c.x2, c.clefFratrie);
+        ajouterSegment(c.gapDebut, x2Final, laneY, c.y2, c.clefFratrie);
+        ajouterSegmentH(c.gapDebut, laneY, c.x1, x2Final, c.clefFratrie);
       });
     }
   });
