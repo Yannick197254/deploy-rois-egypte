@@ -349,7 +349,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.67</span>
+  <span class="badge-version">v2.68</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1706,11 +1706,16 @@ function construireVueGraphique(){
       ajouterSegmentH(u.gen, y, x1, x2, 'MARIAGE:' + u.id);
     } else if(u.membres.length > 2 && u.anchor){
       const idxAncre = u.membres.indexOf(u.anchor);
-      const xAncre = u.centreMembre[u.anchor];
+      const centreXAncre = u.centreMembre[u.anchor];
+      const largeurAncre = largeurBoiteDe(u.anchor);
       const { top: topAncre, hauteur: hAncre } = bordsBoiteDe(u, u.anchor);
       u.membres.forEach((pid, idx) => {
         if(pid === u.anchor) return;
         const xConjoint = u.centreMembre[pid];
+        // Le trait part du BORD de la vignette (gauche ou droit selon le
+        // côté du conjoint), pas de son centre — sinon la moitié du trait
+        // passe sous la boîte opaque et se retrouve cachée.
+        const xAncre = xConjoint < centreXAncre ? centreXAncre - largeurAncre / 2 : centreXAncre + largeurAncre / 2;
         const rang = Math.abs(idx - idxAncre);
         const yLien = topAncre + hAncre * fractionLienPourConjoint(pid, rang);
         ajouterSegmentH(u.gen, yLien, xAncre, xConjoint, 'MARIAGE:' + u.id);
@@ -2107,11 +2112,16 @@ function construireVueGraphique(){
       // Hatchepsout), dont la vignette est alignée sur celle de l'ancre
       // mais dont le lien reste toujours au 1er palier (10%) des 2 côtés.
       const idxAncre = u.membres.indexOf(u.anchor);
-      const xAncre = u.centreMembre[u.anchor];
+      const centreXAncre = u.centreMembre[u.anchor];
+      const largeurAncre = largeurBoiteDe(u.anchor);
       const { top: topAncre, hauteur: hAncre } = bordsBoiteDe(u, u.anchor);
       u.membres.forEach((pid, idx) => {
         if(pid === u.anchor) return;
         const xConjoint = u.centreMembre[pid];
+        // Le trait part du BORD de la vignette (gauche ou droit selon le
+        // côté du conjoint), pas de son centre — sinon la moitié du trait
+        // passe sous la boîte opaque et se retrouve cachée.
+        const xAncre = xConjoint < centreXAncre ? centreXAncre - largeurAncre / 2 : centreXAncre + largeurAncre / 2;
         const rang = Math.abs(idx - idxAncre);
         const fraction = fractionLienPourConjoint(pid, rang);
         const yAncre = topAncre + hAncre * fraction;
