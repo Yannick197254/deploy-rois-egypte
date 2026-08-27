@@ -316,7 +316,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.57</span>
+  <span class="badge-version">v2.58</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -832,17 +832,26 @@ function fractionLienPourConjoint(pid, rang){
 function bordsBoiteDe(u, pid){
   const h = hauteurBoiteDe(pid);
   if(u.anchor && pid !== u.anchor){
-    // Conjoint d'une union polygame (ex. épouse d'un roi) : sa vignette est
-    // centrée sur le palier de hauteur correspondant à son rang, plutôt que
-    // sur la ligne médiane commune de la génération — pour un effet
-    // d'éventail qui suit visuellement les liens de mariage.
-    const hAncre = hauteurBoiteDe(u.anchor);
     const centreAncre = u.y + VG.HAUTEUR_BOITE / 2;
+    const pConjoint = PERSONNES.get(pid);
+    if(pConjoint && pConjoint.role === 'roi'){
+      // Conjoint lui/elle-même roi (ex. Hatchepsout) : vignette alignée
+      // exactement sur celle de l'ancre (même centre, donc même hauteur
+      // à l'écran), pas décalée par palier — seul le LIEN de mariage
+      // reste ancré au 1er palier (10%), voir plus bas dans le rendu
+      // des connecteurs (fractionLienPourConjoint).
+      return { top: centreAncre - h / 2, bottom: centreAncre + h / 2, centre: centreAncre, hauteur: h };
+    }
+    // Conjoint "normal" d'une union polygame (ex. épouse d'un roi) : sa
+    // vignette est centrée sur le palier de hauteur correspondant à son
+    // rang, plutôt que sur la ligne médiane commune de la génération —
+    // pour un effet d'éventail qui suit visuellement les liens de mariage.
+    const hAncre = hauteurBoiteDe(u.anchor);
     const topAncre = centreAncre - hAncre / 2;
     const idxAncre = u.membres.indexOf(u.anchor);
     const idxPid = u.membres.indexOf(pid);
     const rang = Math.abs(idxPid - idxAncre);
-    const centre = topAncre + hAncre * fractionLienPourConjoint(pid, rang);
+    const centre = topAncre + hAncre * fractionLienRoi(rang);
     return { top: centre - h / 2, bottom: centre + h / 2, centre, hauteur: h };
   }
   const centre = u.y + VG.HAUTEUR_BOITE / 2;
@@ -1823,9 +1832,10 @@ function construireVueGraphique(){
     if(u.membres.length > 2 && u.anchor){
       // Cas polygame : un trait de l'ancre (ex. le roi) vers CHAQUE conjoint.
       // Le point d'accroche des deux côtés suit désormais le même palier de
-      // hauteur (voir fractionLienRoi/bordsBoiteDe ci-dessus) : la vignette
-      // du conjoint est elle-même centrée sur ce palier, donc les deux
-      // extrémités du trait direct tombent exactement à la même hauteur.
+      // hauteur (voir fractionLienPourConjoint/bordsBoiteDe ci-dessus) —
+      // sauf cas particulier d'un conjoint lui/elle-même roi (ex.
+      // Hatchepsout), dont la vignette est alignée sur celle de l'ancre
+      // mais dont le lien reste toujours au 1er palier (10%) des 2 côtés.
       const idxAncre = u.membres.indexOf(u.anchor);
       const xAncre = u.centreMembre[u.anchor];
       const { top: topAncre, hauteur: hAncre } = bordsBoiteDe(u, u.anchor);
@@ -1833,8 +1843,9 @@ function construireVueGraphique(){
         if(pid === u.anchor) return;
         const xConjoint = u.centreMembre[pid];
         const rang = Math.abs(idx - idxAncre);
-        const yAncre = topAncre + hAncre * fractionLienPourConjoint(pid, rang);
-        const yConjoint = bordsBoiteDe(u, pid).centre;
+        const fraction = fractionLienPourConjoint(pid, rang);
+        const yAncre = topAncre + hAncre * fraction;
+        const yConjoint = topAncre + hAncre * fraction;
         const mariageCorrespondant = MARIAGES.find(m =>
           (m.p1 === u.anchor && m.p2 === pid) || (m.p1 === pid && m.p2 === u.anchor)
         );
