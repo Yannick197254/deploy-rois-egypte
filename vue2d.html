@@ -316,7 +316,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.58</span>
+  <span class="badge-version">v2.59</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -856,6 +856,26 @@ function bordsBoiteDe(u, pid){
   }
   const centre = u.y + VG.HAUTEUR_BOITE / 2;
   return { top: centre - h / 2, bottom: centre + h / 2, centre, hauteur: h };
+}
+
+// Hauteur EXACTE à laquelle le lien de mariage touche "monId", pour son
+// mariage précis avec "autreId" — indispensable si "monId" est l'ancre
+// d'une union fusionnée (ex. un roi) : la hauteur de contact varie alors
+// selon le rang de CE conjoint précis (10%, 35%...), donc le centre
+// global de sa propre vignette (bordsBoiteDe(...).centre) ne convient
+// pas. Si "monId" n'est pas l'ancre de cette union, le centre habituel
+// de sa vignette est déjà correct (bordsBoiteDe gère ce cas).
+function hauteurLienDeMariage(union, monId, autreId){
+  if(union.anchor === monId && autreId !== undefined && union.membres.includes(autreId)){
+    const centreAncre = union.y + VG.HAUTEUR_BOITE / 2;
+    const hAncre = hauteurBoiteDe(monId);
+    const topAncre = centreAncre - hAncre / 2;
+    const idxAncre = union.membres.indexOf(monId);
+    const idxAutre = union.membres.indexOf(autreId);
+    const rang = Math.abs(idxAutre - idxAncre);
+    return topAncre + hAncre * fractionLienPourConjoint(autreId, rang);
+  }
+  return bordsBoiteDe(union, monId).centre;
 }
 
 // Remonte la lignée d'une personne (père en priorité, sinon mère) jusqu'à
@@ -1509,8 +1529,8 @@ function construireVueGraphique(){
       // de cas particulier ici, le centre renvoyé est déjà le bon palier.
       let y1;
       if(y1 === undefined){
-        const yPereBas = uParentPere && uParentPere.x !== undefined ? bordsBoiteDe(uParentPere, fil.pere).centre : undefined;
-        const yMereBas = uParentMere && uParentMere.x !== undefined ? bordsBoiteDe(uParentMere, fil.mere).centre : undefined;
+        const yPereBas = uParentPere && uParentPere.x !== undefined ? hauteurLienDeMariage(uParentPere, fil.pere, fil.mere) : undefined;
+        const yMereBas = uParentMere && uParentMere.x !== undefined ? hauteurLienDeMariage(uParentMere, fil.mere, fil.pere) : undefined;
         y1 = (yPereBas !== undefined || yMereBas !== undefined)
           ? Math.max(yPereBas ?? -Infinity, yMereBas ?? -Infinity)
           : uParent.y + VG.HAUTEUR_BOITE;
