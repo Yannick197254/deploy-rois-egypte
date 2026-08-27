@@ -349,7 +349,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.75</span>
+  <span class="badge-version">v2.76</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1850,7 +1850,7 @@ function construireVueGraphique(){
       // doivent le contourner plutôt que l'inverse.
       const prioritaire = (xPere !== undefined && xMere === undefined && fil && !fil.mere && PERSONNES.get(fil.pere)?.role === 'roi')
         || (xMere !== undefined && xPere === undefined && fil && !fil.pere && PERSONNES.get(fil.mere)?.role === 'roi');
-      tousConnecteurs.push({ x1, y1, x2, y2, gapDebut: gapDebutReel, gapFin: u.gen, incertain: !!(fil && fil.incertain), estPont: liensEnPointilles.has(m), estPontStructurel: liensEnPointilles.has(m), clefFratrie, prioritaire });
+      tousConnecteurs.push({ x1, y1, x2, y2, gapDebut: gapDebutReel, gapFin: u.gen, incertain: !!(fil && fil.incertain), estPont: liensEnPointilles.has(m), estPontStructurel: liensEnPointilles.has(m), clefFratrie, prioritaire, centreX2, largeurEnfant });
     });
   });
 
@@ -2188,11 +2188,30 @@ function construireVueGraphique(){
   // "pont"), même si le lien n'était pas structurellement un pont à
   // l'origine — la promotion elle-même signale visuellement qu'un
   // détour a été nécessaire.
-  pontsParMarge.forEach(({x1,y1,x2,y2,gapDebut,gapFin,incertain,clefFratrie}, index) => {
+  pontsParMarge.forEach((connecteur, index) => {
+    let {x1,y1,x2,y2,gapDebut,gapFin,incertain,clefFratrie,centreX2,largeurEnfant} = connecteur;
     const gapArrivee = gapFin - 1;
     const canalX = canalXParPont[index];
     const laneY1 = hautCouloir(gapDebut) + (basCouloir(gapDebut) - hautCouloir(gapDebut)) * FRACTION_VOIE_PONT;
     const laneY2 = hautCouloir(gapArrivee) + (basCouloir(gapArrivee) - hautCouloir(gapArrivee)) * FRACTION_VOIE_PONT;
+
+    // Les liens locaux (calculés et enregistrés AVANT les ponts, voir plus
+    // haut) peuvent déjà occuper la position d'arrivée naturelle de ce
+    // pont — ex. le tronc vertical d'un enfant voisin. Comme le pont est
+    // calculé en dernier, c'est à LUI de se décaler pour l'éviter (par
+    // paliers de 1/4 de la largeur de sa propre vignette d'arrivée,
+    // toujours en restant en contact avec elle), plutôt que de perturber
+    // le lien local déjà en place.
+    if(centreX2 !== undefined && largeurEnfant !== undefined){
+      const candidats = [x2, centreX2, centreX2 - largeurEnfant/4, centreX2 + largeurEnfant/4,
+        centreX2 - largeurEnfant/2 + 2, centreX2 + largeurEnfant/2 - 2];
+      const libre = candidats.find(xEssai =>
+        !(segmentsVerticauxParCouloir.get(gapArrivee) || []).some(s =>
+          s.yFrom < y2 + 6 && y2 - 40 < s.yTo && Math.abs(s.x - xEssai) < 10 && s.clefFratrie !== clefFratrie)
+      );
+      if(libre !== undefined) x2 = libre;
+    }
+    ajouterSegment(gapArrivee, x2, laneY2, y2, clefFratrie);
 
     let d = `M ${x1} ${y1} L ${x1} ${laneY1}`;
     d += segmentAvecSauts(x1, canalX, laneY1, gapDebut, clefFratrie);
