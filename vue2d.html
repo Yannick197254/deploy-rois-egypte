@@ -67,6 +67,16 @@
   body.entete-masquee header.barre-app{ display:none; }
   body.entete-masquee #zoneCanevas{ height:100vh; }
   body.entete-masquee #btnRouvrirEntete{ display:block; }
+
+  #controlesZoom{
+    position:fixed; bottom:16px; right:6px; z-index:50;
+    display:flex; flex-direction:column; gap:4px;
+  }
+  #controlesZoom button{
+    border:1px solid var(--bordure); background:var(--panneau); color:var(--texte);
+    border-radius:6px; width:38px; height:34px; font-size:0.85rem; cursor:pointer;
+    box-shadow:0 1px 4px rgba(0,0,0,0.15);
+  }
   #FamilyChart{ width:100%; height:100%; background:var(--fond); }
   #vueGraphique{ display:none; background:var(--fond); }
   #vueGraphiqueNote{ display:none; padding:0.5rem 1rem; font-size:0.8rem; color:#9a6b1a; background:#fdf3e3; border-bottom:1px solid #f0dfb5; }
@@ -339,7 +349,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.66</span>
+  <span class="badge-version">v2.67</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -359,6 +369,12 @@ create policy "Accès complet filiations" on filiations
 </header>
 
 <button id="btnRouvrirEntete" onclick="basculerEntete()" title="Quitter le plein écran">🔽</button>
+
+<div id="controlesZoom">
+  <button onclick="zoomerBouton(1.25)" title="Zoomer">➕</button>
+  <button onclick="reinitialiserZoom()" title="Réinitialiser le zoom">100%</button>
+  <button onclick="zoomerBouton(0.8)" title="Dézoomer">➖</button>
+</div>
 
 <div id="zoneCanevas">
   <div id="messageZone" class="chargement">Chargement de l'arbre…</div>
@@ -1471,6 +1487,14 @@ let personToUnionsGlobal = new Map();
 // ============================================================
 // Recentrage de la vue au clic sur une personne (vue graphique SVG)
 // ============================================================
+// Variables de zoom pour la Vue graphique : le SVG garde toujours le même
+// viewBox (coordonnées internes stables) ; ce sont ses attributs
+// width/height (taille réelle à l'écran) qui portent le zoom, voir fin de
+// construireVueGraphique. dimensionsBaseSVG mémorise la taille "100%".
+let zoomActuel = 1;
+const ZOOM_MIN = 0.25, ZOOM_MAX = 4, ZOOM_PAS = 1.25;
+const dimensionsBaseSVG = { largeur: 0, hauteur: 0 };
+
 function escapeHtml(str){
   return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -1478,11 +1502,43 @@ function escapeHtml(str){
 function centrerSurPersonne(x, y){
   const zone = document.getElementById('zoneCanevas');
   zone.scrollTo({
-    left: x - zone.clientWidth / 2,
-    top: y - zone.clientHeight / 2,
+    left: x * zoomActuel - zone.clientWidth / 2,
+    top: y * zoomActuel - zone.clientHeight / 2,
     behavior: 'smooth'
   });
 }
+
+// Applique un nouveau niveau de zoom à la Vue graphique en ajustant les
+// attributs width/height du SVG (le viewBox ne change jamais), en gardant
+// si possible un point de référence stable à l'écran (utilisé par le
+// pincement à 2 doigts, pour zoomer "sous les doigts" plutôt que de sauter
+// ailleurs). pointEcranX/Y sont des coordonnées relatives à #zoneCanevas ;
+// si omises, on garde le centre de la zone visible actuelle comme référence.
+function appliquerZoom(nouveauZoom, pointEcranX, pointEcranY){
+  const svg = document.getElementById('vueGraphique');
+  const zone = document.getElementById('zoneCanevas');
+  if(!svg || !dimensionsBaseSVG.largeur) return;
+  nouveauZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, nouveauZoom));
+  const px = pointEcranX ?? zone.clientWidth / 2;
+  const py = pointEcranY ?? zone.clientHeight / 2;
+  // Coordonnée SVG (viewBox) sous le point de référence, AVANT le zoom.
+  const svgX = (zone.scrollLeft + px) / zoomActuel;
+  const svgY = (zone.scrollTop + py) / zoomActuel;
+  zoomActuel = nouveauZoom;
+  svg.setAttribute('width', dimensionsBaseSVG.largeur * zoomActuel);
+  svg.setAttribute('height', dimensionsBaseSVG.hauteur * zoomActuel);
+  // Réajuste le défilement pour que ce même point SVG reste sous le doigt/curseur.
+  zone.scrollLeft = svgX * zoomActuel - px;
+  zone.scrollTop = svgY * zoomActuel - py;
+}
+function zoomerBouton(facteur){
+  appliquerZoom(zoomActuel * facteur);
+}
+window.zoomerBouton = zoomerBouton;
+function reinitialiserZoom(){
+  appliquerZoom(1);
+}
+window.reinitialiserZoom = reinitialiserZoom;
 
 // Recherche d'une personne dans la Vue graphique : id -> {x, y} de sa
 // vignette (reconstruite à chaque tracé de la vue, voir fin de
@@ -1989,8 +2045,13 @@ function construireVueGraphique(){
   const largeurTotale = Math.max(largeurContenu, ...canalXParPont, 0) + VG.MARGE;
   const hauteurTotale = generationsTriees.length * VG.HAUTEUR_LIGNE + VG.MARGE * 2;
   svg.setAttribute('viewBox', `0 0 ${largeurTotale} ${hauteurTotale}`);
-  svg.setAttribute('width', largeurTotale);
-  svg.setAttribute('height', hauteurTotale);
+  // width/height (et non le viewBox) portent le zoom : on les fixe à la
+  // taille de base, multipliée par le niveau de zoom courant — le
+  // viewBox, lui, ne change jamais (coordonnées internes stables).
+  dimensionsBaseSVG.largeur = largeurTotale;
+  dimensionsBaseSVG.hauteur = hauteurTotale;
+  svg.setAttribute('width', largeurTotale * zoomActuel);
+  svg.setAttribute('height', hauteurTotale * zoomActuel);
 
   traitesLocalement.forEach(({x1,y1,x2,y2,gapDebut,laneY,incertain,estPontStructurel,clefFratrie,traitDirect}) => {
     const classes = 'lien-filiation' + (estPontStructurel ? ' lien-pont-profond' : '') + (incertain ? ' lien-incertain' : '');
@@ -2369,6 +2430,43 @@ function initConnection() {
 
   zone.addEventListener('mouseenter', () => zone.classList.add('pan-actif'));
   zone.addEventListener('mouseleave', () => zone.classList.remove('pan-actif', 'pan-en-cours'));
+})();
+
+// ============================================================
+// Zoom par pincement à 2 doigts (équivalent tactile de Ctrl+molette),
+// pour la Vue graphique sur mobile/tablette.
+// ============================================================
+(function initPincementZoom(){
+  const zone = document.getElementById('zoneCanevas');
+  let distanceDepart = null;
+  let zoomDepart = 1;
+
+  const distance = (t1, t2) => Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+  const centreEcran = (t1, t2, rect) => ({
+    x: (t1.clientX + t2.clientX) / 2 - rect.left,
+    y: (t1.clientY + t2.clientY) / 2 - rect.top,
+  });
+
+  zone.addEventListener('touchstart', (e) => {
+    if(e.touches.length === 2){
+      distanceDepart = distance(e.touches[0], e.touches[1]);
+      zoomDepart = zoomActuel;
+    }
+  }, { passive: true });
+
+  zone.addEventListener('touchmove', (e) => {
+    if(e.touches.length === 2 && distanceDepart){
+      e.preventDefault(); // empêche le zoom natif de la page de se déclencher en même temps
+      const nouvelleDistance = distance(e.touches[0], e.touches[1]);
+      const rect = zone.getBoundingClientRect();
+      const centre = centreEcran(e.touches[0], e.touches[1], rect);
+      appliquerZoom(zoomDepart * (nouvelleDistance / distanceDepart), centre.x, centre.y);
+    }
+  }, { passive: false });
+
+  const finPincement = () => { distanceDepart = null; };
+  zone.addEventListener('touchend', finPincement);
+  zone.addEventListener('touchcancel', finPincement);
 })();
 
 initConnection();
