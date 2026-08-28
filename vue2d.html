@@ -364,7 +364,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.88</span>
+  <span class="badge-version">v2.89</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1743,7 +1743,7 @@ function construireVueGraphique(){
     // bas que nécessaire.
     const xColonne = unionsEnfants[0].u.x;
     const uRoi = unions.get((personToUnionsGlobal.get(roiId) || [])[0]);
-    const yDepart = uRoi && uRoi.x !== undefined ? bordsBoiteDe(uRoi, roiId).bottom + 160 : unionsEnfants[0].u.y;
+    const yDepart = uRoi && uRoi.x !== undefined ? bordsBoiteDe(uRoi, roiId).bottom + VG.HAUTEUR_BOITE : unionsEnfants[0].u.y;
     unionsEnfants.forEach((e, i) => {
       e.u.x = xColonne;
       e.u.y = yDepart + i * ESPACEMENT_COLONNE;
@@ -2326,7 +2326,7 @@ function construireVueGraphique(){
     // hauteur alternative proche du roi (départ 2x plus long qu'avant).
     const xMin = Math.min(x1, xSpine), xMax = Math.max(x1, xSpine);
     const yCible5pct = yHaut + (yBas - yHaut) * 0.05;
-    const decalagesRepli = [0, 20, 45, 75, 110, 150, 200, 260];
+    const decalagesRepli = [0, 8, 16, 28, 42, 60, 85, 115];
     let yCoude = yCible5pct;
     for(const decalage of decalagesRepli){
       const essai = yCible5pct + decalage;
