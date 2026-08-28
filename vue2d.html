@@ -77,6 +77,21 @@
     border-radius:6px; width:38px; height:34px; font-size:0.85rem; cursor:pointer;
     box-shadow:0 1px 4px rgba(0,0,0,0.15);
   }
+
+  #panneauLegende{
+    position:fixed; bottom:60px; right:6px; z-index:50; width:250px;
+    background:var(--panneau); border:1px solid var(--bordure); border-radius:8px;
+    padding:10px 12px; box-shadow:0 2px 10px rgba(0,0,0,0.2); font-size:0.82rem;
+  }
+  #panneauLegende.cache{ display:none; }
+  .legende-titre{ display:flex; justify-content:space-between; align-items:center; font-weight:600; margin-bottom:6px; }
+  .legende-titre button{ border:none; background:none; cursor:pointer; font-size:0.9rem; color:var(--texte); }
+  .legende-section{ font-weight:600; margin:8px 0 4px; color:#9a6b1a; }
+  .legende-section:first-of-type{ margin-top:0; }
+  .legende-ligne{ display:flex; align-items:center; gap:8px; margin:4px 0; }
+  .legende-puce{ flex-shrink:0; }
+  .puce-boite{ width:18px; height:14px; border:1.5px solid; border-radius:3px; }
+  .puce-trait{ width:22px; height:3px; border-radius:2px; }
   #FamilyChart{ width:100%; height:100%; background:var(--fond); }
   #vueGraphique{ display:none; background:var(--fond); }
   #vueGraphiqueNote{ display:none; padding:0.5rem 1rem; font-size:0.8rem; color:#9a6b1a; background:#fdf3e3; border-bottom:1px solid #f0dfb5; }
@@ -348,7 +363,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.78</span>
+  <span class="badge-version">v2.79</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -365,9 +380,25 @@ create policy "Accès complet filiations" on filiations
     <span id="rechercheVG-status" class="statut-recherche"></span>
   </div>
   <button id="btnMasquerEntete" class="link-btn" onclick="basculerEntete()" title="Plein écran (masque aussi la barre d'adresse et les onglets sur mobile)">⛶ Plein écran</button>
+  <button id="btnLegende" class="link-btn" onclick="basculerLegende()" title="Légende des couleurs">🎨 Légende</button>
 </header>
 
 <button id="btnRouvrirEntete" onclick="basculerEntete()" title="Quitter le plein écran">🔽</button>
+
+<div id="panneauLegende" class="cache">
+  <div class="legende-titre">Légende <button onclick="basculerLegende()" title="Fermer">✕</button></div>
+  <div class="legende-section">Vignettes</div>
+  <div class="legende-ligne"><span class="legende-puce puce-boite" style="background:#f6e3ac;border-color:#b8860b;"></span>Roi / Pharaon</div>
+  <div class="legende-ligne"><span class="legende-puce puce-boite" style="background:#a8d5ba;border-color:#4a8c67;"></span>Grande épouse royale</div>
+  <div class="legende-ligne"><span class="legende-puce puce-boite" style="background:#dcefe2;border-color:#7fb896;"></span>Épouse royale</div>
+  <div class="legende-ligne"><span class="legende-puce puce-boite" style="background:#fff;border-color:var(--bordure);"></span>Autre personne</div>
+  <div class="legende-ligne"><span class="legende-puce puce-boite" style="background:#fdecea;border-color:#c0392b;"></span>Référence introuvable</div>
+  <div class="legende-section">Liens</div>
+  <div class="legende-ligne"><span class="legende-puce puce-trait" style="background:#c0392b;"></span>Mariage</div>
+  <div class="legende-ligne"><span class="legende-puce puce-trait puce-pointille" style="background:linear-gradient(90deg,#c0392b 60%,transparent 40%);background-size:6px 100%;"></span>Mariage décalé (épouse non adjacente)</div>
+  <div class="legende-ligne"><span class="legende-puce puce-trait" style="background:#2e7d32;"></span>Filiation / fratrie</div>
+  <div class="legende-ligne"><span class="legende-puce puce-trait puce-pointille" style="background:linear-gradient(90deg,#2e7d32 60%,transparent 40%);background-size:6px 100%;"></span>Filiation incertaine ou reconstruite</div>
+</div>
 
 <div id="controlesZoom">
   <button onclick="zoomerBouton(1.25)" title="Zoomer">➕</button>
@@ -1621,6 +1652,11 @@ window.rechercherEtCentrer = rechercherEtCentrer;
 function estEnPleinEcran(){
   return !!(document.fullscreenElement || document.webkitFullscreenElement);
 }
+function basculerLegende(){
+  document.getElementById('panneauLegende').classList.toggle('cache');
+}
+window.basculerLegende = basculerLegende;
+
 function basculerEntete(){
   if(!estEnPleinEcran()){
     document.body.classList.add('entete-masquee');
@@ -2317,11 +2353,12 @@ function construireVueGraphique(){
         : p.statut_epouse === 'epouse_royale' ? ' epouse-royale' : '';
       groupe.appendChild(creer('rect', { class:'noeud-boite' + (p.role === 'roi' ? ' roi' : '') + classeStatutEpouse, x, y, width:largeur, height:h, rx:5 }));
       const regneTxt = [p.regne_debut, p.regne_fin].filter(Boolean).join(' – ');
-      // Un roi (boîte 2x plus haute) garde son nom et son règne centrés
-      // verticalement dans tout l'espace disponible, pas collés en haut
-      // comme sur une boîte normale.
-      const yNom = h > VG.HAUTEUR_BOITE ? centreY - 6 : y + 18;
-      const yDate = h > VG.HAUTEUR_BOITE ? centreY + 14 : y + 34;
+      // Le nom et les dates sont désormais toujours à la même hauteur,
+      // qu'il s'agisse d'un roi ou non — pour un roi, ça les fait
+      // remonter tout en haut de sa grande vignette plutôt que de rester
+      // centrés au milieu.
+      const yNom = u.y + 18;
+      const yDate = u.y + 34;
       const nom = creer('text', {
         class: 'noeud-nom ' + (p.sexe === 'Femme' ? 'femme' : 'homme') + (p.role === 'roi' ? ' roi' : ''),
         x: cx, y: yNom, 'text-anchor':'middle'
