@@ -364,7 +364,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.94</span>
+  <span class="badge-version">v2.95</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1770,13 +1770,18 @@ function construireVueGraphique(){
       return (fb ? 1 : 0) - (fa ? 1 : 0);
     });
     // Colonne alignée sur la position x du 1er enfant (déjà placé "vers
-    // la droite" par l'algorithme habituel) ; empilée verticalement, en
-    // partant d'une estimation de la hauteur du coude (voir le rendu de
-    // la fourchette plus bas, qui affine cette hauteur au cas par cas) —
-    // pas de la hauteur de ligne standard, pour ne pas descendre plus
-    // bas que nécessaire.
-    const xColonne = unionsEnfants[0].u.x;
+    // la droite" par l'algorithme habituel), avec un peu plus d'espace
+    // que l'écart standard entre 2 vignettes classiques (VG.ECART_UNION)
+    // vis-à-vis de la vignette voisine — pour laisser la place à la
+    // colonne vertébrale de la fourchette sans la toucher. Empilée
+    // verticalement, en partant d'une estimation de la hauteur du coude
+    // (voir le rendu de la fourchette plus bas, qui affine cette hauteur
+    // au cas par cas) — pas de la hauteur de ligne standard, pour ne pas
+    // descendre plus bas que nécessaire.
     const uRoi = unions.get((personToUnionsGlobal.get(roiId) || [])[0]);
+    const MARGE_SUPPLEMENTAIRE = 40; // > 24 (décalage de la colonne vertébrale), pour rester nettement à distance
+    const colonneAGauche = uRoi && uRoi.x !== undefined && unionsEnfants[0].u.x < uRoi.centreMembre[roiId];
+    const xColonne = unionsEnfants[0].u.x + (colonneAGauche ? -MARGE_SUPPLEMENTAIRE : MARGE_SUPPLEMENTAIRE);
     const yDepart = uRoi && uRoi.x !== undefined ? bordsBoiteDe(uRoi, roiId).bottom + VG.HAUTEUR_BOITE / 2 * (2/3) : unionsEnfants[0].u.y;
     unionsEnfants.forEach((e, i) => {
       e.u.x = xColonne;
