@@ -364,7 +364,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.92</span>
+  <span class="badge-version">v2.93</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1308,14 +1308,21 @@ function ordonnerEtPositionner(unions, unionParentDe){
 
     // Un fils aîné (qui n'est pas roi lui-même — cas géré séparément par
     // les fourchettes) est toujours placé en premier parmi ses frères et
-    // sœurs, donc le plus à gauche possible — sans changer la logique
-    // d'évitement des chevauchements ni de largeur réservée, qui
-    // s'appliquent normalement quel que soit l'ordre de traitement.
+    // sœurs, donc le plus à gauche possible. Mais le coller directement
+    // à SON propre alignement (sur ses parents) peut l'isoler loin du
+    // reste de la fratrie, si sa position idéale diffère nettement de la
+    // leur (ex. une mère différente). On place donc D'ABORD les autres
+    // frères/sœurs normalement (comme si le fils aîné n'existait pas),
+    // PUIS on colle le fils aîné juste à leur gauche, sans écart — il
+    // reste bien le premier/le plus à gauche, mais sans jamais se
+    // retrouver détaché du reste du groupe.
     const enfantsBruts = enfantsUnionsPar.get(uid) || [];
     const estFilsAineDe = (eid) => (unions.get(eid)?.membres || []).some(m2 =>
       unionParentDe.get(m2) === uid && (PERSONNES.get(m2)?.fils_aine === true || PERSONNES.get(m2)?.fils_aine === 'true')
     );
-    const enfants = enfantsBruts.slice().sort((a, b) => (estFilsAineDe(b) ? 1 : 0) - (estFilsAineDe(a) ? 1 : 0));
+    const idxFilsAine = enfantsBruts.length > 1 ? enfantsBruts.findIndex(estFilsAineDe) : -1;
+    const filsAineEid = idxFilsAine >= 0 ? enfantsBruts[idxFilsAine] : null;
+    const enfants = filsAineEid ? enfantsBruts.filter((_, i) => i !== idxFilsAine) : enfantsBruts;
     let xEnfant = xDebut;
     enfants.forEach((eid, indexEnfant) => {
       let xCible = xEnfant;
@@ -1363,7 +1370,7 @@ function ordonnerEtPositionner(unions, unionParentDe){
           // subissent chacune un tel décalage, un léger chevauchement
           // reste possible.
           const xMaxAutorise = xEnfant + largeurPropreUnion(uEnfant) / 2;
-          const xMinAutorise = indexEnfant === 0 ? (xEnfant - largeurPropreUnion(uEnfant) / 2) : xEnfant;
+          const xMinAutorise = (indexEnfant === 0 && !filsAineEid) ? (xEnfant - largeurPropreUnion(uEnfant) / 2) : xEnfant;
           xCible = Math.max(xMinAutorise, Math.min(xVoulu, xMaxAutorise));
         }
       }
@@ -1386,6 +1393,15 @@ function ordonnerEtPositionner(unions, unionParentDe){
       const uEnfantPlace = unions.get(eid);
       xEnfant = uEnfantPlace.x + largeurPropreUnion(uEnfantPlace) + VG.ECART_UNION;
     });
+    if (filsAineEid) {
+      // Collé juste à gauche du premier des autres enfants déjà placés
+      // (bord réel, même écart standard) — jamais avant xDebut (ne doit
+      // pas empiéter sur la branche précédente).
+      const uPremierAutre = enfants.length ? unions.get(enfants[0]) : null;
+      const xLimiteDroite = uPremierAutre ? uPremierAutre.x - VG.ECART_UNION : xDebut + largeurUnion(filsAineEid);
+      const xFilsAine = Math.max(xDebut, xLimiteDroite - largeurUnion(filsAineEid));
+      placerUnion(filsAineEid, xFilsAine, gen + 1);
+    }
   }
 
   // ---- 8) Placement des racines, avec insertion des zones-ponts adjacentes ----
