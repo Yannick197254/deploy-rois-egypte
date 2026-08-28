@@ -364,7 +364,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.93</span>
+  <span class="badge-version">v2.94</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -2348,7 +2348,14 @@ function construireVueGraphique(){
     const y1 = bordsBoiteDe(uRoi, roiId).bottom; // départ court : juste sous la vignette, pas son centre
     const gapDebut = uRoi.gen;
     const clefVirtuelle = 'FOURCHETTE:' + roiId;
-    const xSpine = membresColonne[0].x - 24; // petite colonne vertébrale juste avant les vignettes
+    // La colonne vertébrale se place du côté du roi : si la colonne est
+    // à gauche du roi, elle passe à DROITE des vignettes (entre elles et
+    // le roi) ; si elle est à droite (cas le plus courant), elle passe
+    // à GAUCHE des vignettes, comme avant.
+    const colonneAGauche = membresColonne[0].x < x1;
+    const xSpine = colonneAGauche
+      ? membresColonne[0].x + VG.LARGEUR_PERSONNE + 24
+      : membresColonne[0].x - 24;
     const points = membresColonne.map(u => {
       const id = u.membres[0];
       return { x2: u.centreMembre[id], y: u.y + VG.HAUTEUR_BOITE / 2 };
