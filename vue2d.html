@@ -364,7 +364,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.83</span>
+  <span class="badge-version">v2.85</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1135,7 +1135,7 @@ function calculerLiensFiliation(personToUnions){
   return unionParentDe;
 }
 
-const MAX_GEN_AFFICHEES = 4; // limite volontaire de profondeur (cf. discussion du 21/08/2026)
+const MAX_GEN_AFFICHEES = Infinity; // plus de limite volontaire de profondeur (levée à la demande de l'utilisateur)
 
 function ordonnerEtPositionner(unions, unionParentDe){
   const nomUnion = u => nomDe(u.membres[0]);
@@ -2298,7 +2298,11 @@ function construireVueGraphique(){
         (m.p1 === u.membres[0] && m.p2 === u.membres[1]) || (m.p1 === u.membres[1] && m.p2 === u.membres[0])
       );
       const incertain = !!(mariageCorrespondant && mariageCorrespondant.incertain);
-      svg.appendChild(creer('line', { class:'lien-mariage' + (incertain ? ' lien-mariage-incertain' : ''), x1, y1:y, x2, y2:y }));
+      // Comme pour les liens de fratrie, un petit saut en arc marque
+      // proprement chaque croisement avec un tronc de fratrie déjà posé
+      // (clef dédiée "MARIAGE:..." pour ne jamais s'auto-filtrer).
+      const dMariage = `M ${x1} ${y} ` + segmentAvecSauts(x1, x2, y, u.gen, 'MARIAGE:' + u.id);
+      svg.appendChild(creer('path', { class:'lien-mariage' + (incertain ? ' lien-mariage-incertain' : ''), d: dMariage, fill:'none' }));
       return;
     }
     if(u.membres.length > 2 && u.anchor){
@@ -2330,7 +2334,10 @@ function construireVueGraphique(){
         // Trait direct dans tous les cas : l'étagement vertical par palier
         // (voir bordsBoiteDe) sépare déjà les rangs, donc plus besoin d'un
         // détour par une "voie" commune pour éviter les boîtes intermédiaires.
-        svg.appendChild(creer('line', { class:'lien-mariage' + (incertain ? ' lien-mariage-incertain' : ''), x1:xAncre, y1:yAncre, x2:xConjoint, y2:yConjoint }));
+        // Un petit saut en arc marque chaque croisement avec un tronc de
+        // fratrie déjà posé (même mécanisme que ci-dessus).
+        const dMariage = `M ${xAncre} ${yAncre} ` + segmentAvecSauts(xAncre, xConjoint, yAncre, u.gen, 'MARIAGE:' + u.id);
+        svg.appendChild(creer('path', { class:'lien-mariage' + (incertain ? ' lien-mariage-incertain' : ''), d: dMariage, fill:'none' }));
       });
     }
   });
