@@ -364,7 +364,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.85</span>
+  <span class="badge-version">v2.86</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1701,6 +1701,54 @@ function construireVueGraphique(){
   unionsPlacees.forEach(u => u.membres.forEach(m => personnesAffichees.add(m)));
   const nbMasquees = PERSONNES.size - personnesAffichees.size;
 
+  // Regroupement en "fourchette" : quand un roi a 3 enfants isolés ou
+  // plus (un seul parent connu — lui — et rien d'autre : ni conjoint, ni
+  // descendance propre), on les empile en une colonne resserrée plutôt
+  // que de les étaler sur toute la largeur de la génération. Comme ces
+  // enfants sont garantis isolés (aucun conjoint ni descendant), les
+  // repositionner ne peut rien faire chevaucher ailleurs — c'est
+  // justement cette condition qui rend l'opération sûre. Dès qu'un
+  // conjoint ou un enfant est ajouté à l'un d'eux, il quitte
+  // naturellement ce groupe (la condition d'isolement ne tient plus plus)
+  // et repasse par le déploiement classique.
+  const groupesColonne = new Map(); // roiId -> [enfantId, ...]
+  PERSONNES.forEach((_, id) => {
+    const fil = FILIATIONS.find(f => f.enfant === id);
+    if(!fil) return;
+    const roiId = (fil.pere && !fil.mere) ? fil.pere : (fil.mere && !fil.pere) ? fil.mere : null;
+    if(!roiId) return;
+    const roi = PERSONNES.get(roiId);
+    if(!roi || roi.role !== 'roi') return;
+    const propresUnions = personToUnionsGlobal.get(id) || [];
+    const estIsole = propresUnions.length <= 1
+      && (propresUnions.length === 0 || (unions.get(propresUnions[0]) || { membres: [] }).membres.length === 1)
+      && (childrenOf.get(id) || []).length === 0;
+    if(!estIsole) return;
+    if(!groupesColonne.has(roiId)) groupesColonne.set(roiId, []);
+    groupesColonne.get(roiId).push(id);
+  });
+  const ESPACEMENT_COLONNE = 60;
+  groupesColonne.forEach((enfants, roiId) => {
+    if(enfants.length < 3) return;
+    const unionsEnfants = enfants
+      .map(id => ({ id, uid: (personToUnionsGlobal.get(id) || [])[0] }))
+      .filter(e => e.uid && unions.get(e.uid) && unions.get(e.uid).x !== undefined)
+      .map(e => ({ id: e.id, u: unions.get(e.uid) }));
+    if(unionsEnfants.length < 3) return;
+    // Colonne alignée sur la position x du 1er enfant (déjà placé "vers
+    // la droite" par l'algorithme habituel) ; empilés verticalement à
+    // partir de sa hauteur de génération d'origine, avec un espacement
+    // resserré mais lisible.
+    const xColonne = unionsEnfants[0].u.x;
+    const yDepart = unionsEnfants[0].u.y;
+    unionsEnfants.forEach((e, i) => {
+      e.u.x = xColonne;
+      e.u.y = yDepart + i * ESPACEMENT_COLONNE;
+      e.u.centreMembre[e.id] = xColonne + VG.LARGEUR_PERSONNE / 2;
+      e.u.colonneFourchetteRoi = roiId; // marqueur : rendu du lien en fourchette dédiée
+    });
+  });
+
   const svg = document.getElementById('vueGraphique');
   svg.innerHTML = '';
   const noteEl = document.getElementById('vueGraphiqueNote');
@@ -1820,6 +1868,7 @@ function construireVueGraphique(){
       if(!uidParent) return;
       const uParent = unions.get(uidParent);
       if(!uParent || uParent.x === undefined) return; // parent hors limite d'affichage
+      if(u.colonneFourchetteRoi) return; // rendu séparé, voir plus bas ("Fourchettes")
 
       // Point de départ du trait : le milieu exact entre les 2 VRAIS parents
       // de cet enfant (pas le centre de toute la ligne, qui peut compter
@@ -2240,6 +2289,35 @@ function construireVueGraphique(){
         + segmentAvecSauts(x1, x2, laneY, gapDebut, clefFratrie)
         + ` L ${x2} ${y2}`;
     svg.appendChild(creer('path', { class: classes, d }));
+  });
+
+  // Fourchettes : tronc unique depuis le roi, ramifié vers chaque enfant
+  // d'une colonne (voir "Regroupement en fourchette" plus haut). Le
+  // tronc du roi arrive à 5% de la hauteur de la fourchette (proche du
+  // haut), puis une "colonne vertébrale" verticale dessert chaque enfant
+  // par une petite branche horizontale.
+  groupesColonne.forEach((enfants, roiId) => {
+    const uRoi = unions.get((personToUnionsGlobal.get(roiId) || [])[0]);
+    if(!uRoi || uRoi.x === undefined) return;
+    const membresColonne = enfants
+      .map(id => unions.get((personToUnionsGlobal.get(id) || [])[0]))
+      .filter(u => u && u.colonneFourchetteRoi === roiId)
+      .sort((a, b) => a.y - b.y);
+    if(membresColonne.length < 3) return;
+    const filPremier = FILIATIONS.find(f => f.enfant === membresColonne[0].membres[0]);
+    const x1 = uRoi.centreMembre[roiId];
+    const y1 = hauteurLienDeMariage(uRoi, roiId, undefined);
+    const xSpine = membresColonne[0].x - 24; // petite colonne vertébrale juste avant les vignettes
+    const points = membresColonne.map(u => {
+      const id = u.membres[0];
+      return { x2: u.centreMembre[id], y: u.y + VG.HAUTEUR_BOITE / 2 };
+    });
+    const yHaut = points[0].y, yBas = points[points.length - 1].y;
+    const yArrivee = yHaut + (yBas - yHaut) * 0.05;
+    const incertainFourchette = !filPremier || !!(filPremier.pereIncertain || filPremier.mereIncertaine || !filPremier.pere || !filPremier.mere);
+    let d = `M ${x1} ${y1} L ${x1} ${yArrivee} L ${xSpine} ${yArrivee} M ${xSpine} ${yHaut} L ${xSpine} ${yBas}`;
+    points.forEach(p => { d += ` M ${xSpine} ${p.y} L ${p.x2} ${p.y}`; });
+    svg.appendChild(creer('path', { class: 'lien-filiation' + (incertainFourchette ? ' lien-incertain' : ''), d, fill:'none' }));
   });
 
   // Liens routés par la marge (portée 2+ générations, et liens promus
