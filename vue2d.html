@@ -104,6 +104,7 @@
   #vueGraphique .noeud-boite.roi{ fill:#f6e3ac; stroke:#b8860b; }
   #vueGraphique .noeud-boite.grande-epouse{ fill:#a8d5ba; stroke:#4a8c67; }
   #vueGraphique .noeud-boite.epouse-royale{ fill:#dcefe2; stroke:#7fb896; }
+  #vueGraphique .noeud-boite.fils-aine{ fill:#d6e6f5; stroke:#6b9bc7; }
   #vueGraphique .noeud-clic{ cursor:pointer; }
   #vueGraphique .noeud-clic:hover .noeud-boite{ stroke:var(--bleu); stroke-width:2; }
   #zoneCanevas.pan-actif{ cursor:grab; }
@@ -363,7 +364,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.82</span>
+  <span class="badge-version">v2.83</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -391,13 +392,14 @@ create policy "Accès complet filiations" on filiations
   <div class="legende-ligne"><span class="legende-puce puce-boite" style="background:#f6e3ac;border-color:#b8860b;"></span>Roi / Pharaon</div>
   <div class="legende-ligne"><span class="legende-puce puce-boite" style="background:#a8d5ba;border-color:#4a8c67;"></span>Grande épouse royale</div>
   <div class="legende-ligne"><span class="legende-puce puce-boite" style="background:#dcefe2;border-color:#7fb896;"></span>Épouse royale</div>
+  <div class="legende-ligne"><span class="legende-puce puce-boite" style="background:#d6e6f5;border-color:#6b9bc7;"></span>Fils aîné (hors roi)</div>
   <div class="legende-ligne"><span class="legende-puce puce-boite" style="background:#fff;border-color:var(--bordure);"></span>Autre personne</div>
   <div class="legende-ligne"><span class="legende-puce puce-boite" style="background:#fdecea;border-color:#c0392b;"></span>Référence introuvable</div>
   <div class="legende-section">Liens</div>
   <div class="legende-ligne"><span class="legende-puce puce-trait" style="background:#c0392b;"></span>Mariage</div>
-  <div class="legende-ligne"><span class="legende-puce puce-trait puce-pointille" style="background:linear-gradient(90deg,#c0392b 60%,transparent 40%);background-size:6px 100%;"></span>Mariage incertain ou reconstruit (décalé ou non)</div>
-  <div class="legende-ligne"><span class="legende-puce puce-trait" style="background:#2e7d32;"></span>Filiation / fratrie</div>
-  <div class="legende-ligne"><span class="legende-puce puce-trait puce-pointille" style="background:linear-gradient(90deg,#2e7d32 60%,transparent 40%);background-size:6px 100%;"></span>Filiation incertaine ou reconstruite</div>
+  <div class="legende-ligne"><span class="legende-puce puce-trait puce-pointille" style="background:linear-gradient(90deg,#c0392b 60%,transparent 40%);background-size:6px 100%;"></span>Mariage incertain</div>
+  <div class="legende-ligne"><span class="legende-puce puce-trait" style="background:#2e7d32;"></span>Filiation</div>
+  <div class="legende-ligne"><span class="legende-puce puce-trait puce-pointille" style="background:linear-gradient(90deg,#2e7d32 60%,transparent 40%);background-size:6px 100%;"></span>Filiation incertaine</div>
 </div>
 
 <div id="controlesZoom">
@@ -2355,7 +2357,10 @@ function construireVueGraphique(){
       }
       const classeStatutEpouse = p.statut_epouse === 'grande_epouse_royale' ? ' grande-epouse'
         : p.statut_epouse === 'epouse_royale' ? ' epouse-royale' : '';
-      groupe.appendChild(creer('rect', { class:'noeud-boite' + (p.role === 'roi' ? ' roi' : '') + classeStatutEpouse, x, y, width:largeur, height:h, rx:5 }));
+      // Un fils aîné qui n'est PAS roi lui-même ressort en bleu pâle —
+      // pour un roi, la couleur royale (dorée) prime toujours.
+      const classeFilsAine = (p.role !== 'roi' && (p.fils_aine === true || p.fils_aine === 'true')) ? ' fils-aine' : '';
+      groupe.appendChild(creer('rect', { class:'noeud-boite' + (p.role === 'roi' ? ' roi' : '') + classeStatutEpouse + classeFilsAine, x, y, width:largeur, height:h, rx:5 }));
       const regneTxt = [p.regne_debut, p.regne_fin].filter(Boolean).join(' – ');
       // Le nom et les dates sont toujours à la même hauteur par rapport
       // au sommet RÉEL de leur propre vignette (variable "y", déjà
