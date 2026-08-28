@@ -109,7 +109,7 @@
   #zoneCanevas.pan-actif{ cursor:grab; }
   #zoneCanevas.pan-en-cours{ cursor:grabbing; }
   #vueGraphique .lien-mariage{ stroke:#c0392b; stroke-width:4; }
-  #vueGraphique .lien-mariage-decale{ stroke-dasharray:4,3; }
+  #vueGraphique .lien-mariage-incertain{ stroke-dasharray:4,3; }
   #vueGraphique .lien-filiation{ stroke:#2e7d32; stroke-width:1.6; fill:none; }
   #vueGraphique .lien-filiation.lien-incertain{ stroke-dasharray:5,3; }
   #vueGraphique .etiquette-generation{ font-size:11px; fill:#9a9484; font-weight:600; }
@@ -363,7 +363,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.79</span>
+  <span class="badge-version">v2.81</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -395,7 +395,7 @@ create policy "Accès complet filiations" on filiations
   <div class="legende-ligne"><span class="legende-puce puce-boite" style="background:#fdecea;border-color:#c0392b;"></span>Référence introuvable</div>
   <div class="legende-section">Liens</div>
   <div class="legende-ligne"><span class="legende-puce puce-trait" style="background:#c0392b;"></span>Mariage</div>
-  <div class="legende-ligne"><span class="legende-puce puce-trait puce-pointille" style="background:linear-gradient(90deg,#c0392b 60%,transparent 40%);background-size:6px 100%;"></span>Mariage décalé (épouse non adjacente)</div>
+  <div class="legende-ligne"><span class="legende-puce puce-trait puce-pointille" style="background:linear-gradient(90deg,#c0392b 60%,transparent 40%);background-size:6px 100%;"></span>Mariage incertain ou reconstruit (décalé ou non)</div>
   <div class="legende-ligne"><span class="legende-puce puce-trait" style="background:#2e7d32;"></span>Filiation / fratrie</div>
   <div class="legende-ligne"><span class="legende-puce puce-trait puce-pointille" style="background:linear-gradient(90deg,#2e7d32 60%,transparent 40%);background-size:6px 100%;"></span>Filiation incertaine ou reconstruite</div>
 </div>
@@ -2292,7 +2292,11 @@ function construireVueGraphique(){
       // l'un des deux soit roi ou non.
       const x1 = u.x + VG.LARGEUR_PERSONNE;
       const x2 = u.x + VG.LARGEUR_PERSONNE + VG.ECART_COUPLE;
-      svg.appendChild(creer('line', { class:'lien-mariage', x1, y1:y, x2, y2:y }));
+      const mariageCorrespondant = MARIAGES.find(m =>
+        (m.p1 === u.membres[0] && m.p2 === u.membres[1]) || (m.p1 === u.membres[1] && m.p2 === u.membres[0])
+      );
+      const incertain = !!(mariageCorrespondant && mariageCorrespondant.incertain);
+      svg.appendChild(creer('line', { class:'lien-mariage' + (incertain ? ' lien-mariage-incertain' : ''), x1, y1:y, x2, y2:y }));
       return;
     }
     if(u.membres.length > 2 && u.anchor){
@@ -2324,7 +2328,7 @@ function construireVueGraphique(){
         // Trait direct dans tous les cas : l'étagement vertical par palier
         // (voir bordsBoiteDe) sépare déjà les rangs, donc plus besoin d'un
         // détour par une "voie" commune pour éviter les boîtes intermédiaires.
-        svg.appendChild(creer('line', { class:'lien-mariage' + (incertain ? ' lien-mariage-decale' : ''), x1:xAncre, y1:yAncre, x2:xConjoint, y2:yConjoint }));
+        svg.appendChild(creer('line', { class:'lien-mariage' + (incertain ? ' lien-mariage-incertain' : ''), x1:xAncre, y1:yAncre, x2:xConjoint, y2:yConjoint }));
       });
     }
   });
@@ -2353,12 +2357,12 @@ function construireVueGraphique(){
         : p.statut_epouse === 'epouse_royale' ? ' epouse-royale' : '';
       groupe.appendChild(creer('rect', { class:'noeud-boite' + (p.role === 'roi' ? ' roi' : '') + classeStatutEpouse, x, y, width:largeur, height:h, rx:5 }));
       const regneTxt = [p.regne_debut, p.regne_fin].filter(Boolean).join(' – ');
-      // Le nom et les dates sont désormais toujours à la même hauteur,
-      // qu'il s'agisse d'un roi ou non — pour un roi, ça les fait
-      // remonter tout en haut de sa grande vignette plutôt que de rester
-      // centrés au milieu.
-      const yNom = u.y + 18;
-      const yDate = u.y + 34;
+      // Le nom et les dates sont toujours à la même hauteur par rapport
+      // au sommet RÉEL de leur propre vignette (variable "y", déjà
+      // calculée par bordsBoiteDe ci-dessus) — jamais en dehors de la
+      // boîte, qu'il s'agisse d'un roi ou non.
+      const yNom = y + 18;
+      const yDate = y + 34;
       const nom = creer('text', {
         class: 'noeud-nom ' + (p.sexe === 'Femme' ? 'femme' : 'homme') + (p.role === 'roi' ? ' roi' : ''),
         x: cx, y: yNom, 'text-anchor':'middle'
