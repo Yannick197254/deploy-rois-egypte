@@ -364,7 +364,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.91</span>
+  <span class="badge-version">v2.92</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1306,7 +1306,16 @@ function ordonnerEtPositionner(unions, unionParentDe){
       u.centreMembre[pid] = u.x + i * (VG.LARGEUR_PERSONNE + VG.ECART_COUPLE) + VG.LARGEUR_PERSONNE / 2;
     });
 
-    const enfants = enfantsUnionsPar.get(uid) || [];
+    // Un fils aîné (qui n'est pas roi lui-même — cas géré séparément par
+    // les fourchettes) est toujours placé en premier parmi ses frères et
+    // sœurs, donc le plus à gauche possible — sans changer la logique
+    // d'évitement des chevauchements ni de largeur réservée, qui
+    // s'appliquent normalement quel que soit l'ordre de traitement.
+    const enfantsBruts = enfantsUnionsPar.get(uid) || [];
+    const estFilsAineDe = (eid) => (unions.get(eid)?.membres || []).some(m2 =>
+      unionParentDe.get(m2) === uid && (PERSONNES.get(m2)?.fils_aine === true || PERSONNES.get(m2)?.fils_aine === 'true')
+    );
+    const enfants = enfantsBruts.slice().sort((a, b) => (estFilsAineDe(b) ? 1 : 0) - (estFilsAineDe(a) ? 1 : 0));
     let xEnfant = xDebut;
     enfants.forEach((eid, indexEnfant) => {
       let xCible = xEnfant;
@@ -1735,6 +1744,15 @@ function construireVueGraphique(){
       .filter(e => e.uid && unions.get(e.uid) && unions.get(e.uid).x !== undefined)
       .map(e => ({ id: e.id, u: unions.get(e.uid) }));
     if(unionsEnfants.length < 3) return;
+    // Un fils aîné, s'il fait partie de cette fourchette, passe en tête
+    // de colonne (donc au-dessus des autres) — même règle que pour le
+    // déploiement classique, adaptée à l'orientation verticale ici.
+    unionsEnfants.sort((a, b) => {
+      const pa = PERSONNES.get(a.id), pb = PERSONNES.get(b.id);
+      const fa = pa?.fils_aine === true || pa?.fils_aine === 'true';
+      const fb = pb?.fils_aine === true || pb?.fils_aine === 'true';
+      return (fb ? 1 : 0) - (fa ? 1 : 0);
+    });
     // Colonne alignée sur la position x du 1er enfant (déjà placé "vers
     // la droite" par l'algorithme habituel) ; empilée verticalement, en
     // partant d'une estimation de la hauteur du coude (voir le rendu de
