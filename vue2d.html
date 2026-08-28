@@ -364,7 +364,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.87</span>
+  <span class="badge-version">v2.88</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -1736,11 +1736,14 @@ function construireVueGraphique(){
       .map(e => ({ id: e.id, u: unions.get(e.uid) }));
     if(unionsEnfants.length < 3) return;
     // Colonne alignée sur la position x du 1er enfant (déjà placé "vers
-    // la droite" par l'algorithme habituel) ; empilés verticalement à
-    // partir de sa hauteur de génération d'origine, avec un espacement
-    // resserré mais lisible.
+    // la droite" par l'algorithme habituel) ; empilée verticalement, en
+    // partant d'une estimation de la hauteur du coude (voir le rendu de
+    // la fourchette plus bas, qui affine cette hauteur au cas par cas) —
+    // pas de la hauteur de ligne standard, pour ne pas descendre plus
+    // bas que nécessaire.
     const xColonne = unionsEnfants[0].u.x;
-    const yDepart = unionsEnfants[0].u.y;
+    const uRoi = unions.get((personToUnionsGlobal.get(roiId) || [])[0]);
+    const yDepart = uRoi && uRoi.x !== undefined ? bordsBoiteDe(uRoi, roiId).bottom + 160 : unionsEnfants[0].u.y;
     unionsEnfants.forEach((e, i) => {
       e.u.x = xColonne;
       e.u.y = yDepart + i * ESPACEMENT_COLONNE;
@@ -2317,14 +2320,18 @@ function construireVueGraphique(){
       return { x2: u.centreMembre[id], y: u.y + VG.HAUTEUR_BOITE / 2 };
     });
     const yHaut = points[0].y, yBas = points[points.length - 1].y;
-    // Essaie plusieurs hauteurs de coude, toutes proches du roi (départ
-    // court demandé), jusqu'à trouver une portion horizontale libre.
+    // Hauteur cible : 5% de la hauteur du trait vertical de la fourchette
+    // (le "trait vertical de la fourchette" = la colonne vertébrale,
+    // de yHaut à yBas) — essayée en premier ; si bloquée, on cherche une
+    // hauteur alternative proche du roi (départ 2x plus long qu'avant).
     const xMin = Math.min(x1, xSpine), xMax = Math.max(x1, xSpine);
-    const essais = [10, 25, 45, 70, 100, 140];
-    let yCoude = y1 + essais[essais.length - 1];
-    for(const decalage of essais){
-      const essai = y1 + decalage;
+    const yCible5pct = yHaut + (yBas - yHaut) * 0.05;
+    const decalagesRepli = [0, 20, 45, 75, 110, 150, 200, 260];
+    let yCoude = yCible5pct;
+    for(const decalage of decalagesRepli){
+      const essai = yCible5pct + decalage;
       if(!chevaucheHorizontalement(xMin, xMax, essai, gapDebut)){ yCoude = essai; break; }
+      yCoude = essai; // filet de sécurité : garde le dernier essai si aucun n'est totalement libre
     }
     const yHautSpine = Math.min(yCoude, yHaut);
     const incertainFourchette = !filPremier || !!(filPremier.pereIncertain || filPremier.mereIncertaine || !filPremier.pere || !filPremier.mere);
