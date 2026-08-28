@@ -364,7 +364,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.86</span>
+  <span class="badge-version">v2.87</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -2292,10 +2292,12 @@ function construireVueGraphique(){
   });
 
   // Fourchettes : tronc unique depuis le roi, ramifié vers chaque enfant
-  // d'une colonne (voir "Regroupement en fourchette" plus haut). Le
-  // tronc du roi arrive à 5% de la hauteur de la fourchette (proche du
-  // haut), puis une "colonne vertébrale" verticale dessert chaque enfant
-  // par une petite branche horizontale.
+  // d'une colonne (voir "Regroupement en fourchette" plus haut). Départ
+  // COURT sous la vignette du roi (pas depuis son centre) puis coude
+  // horizontal — la hauteur du coude est choisie parmi plusieurs essais
+  // proches du roi, la première libre de tout chevauchement bloquant
+  // (un simple croisement ponctuel, lui, est toujours géré par les sauts
+  // en arc de segmentAvecSauts, comme pour les fratries classiques).
   groupesColonne.forEach((enfants, roiId) => {
     const uRoi = unions.get((personToUnionsGlobal.get(roiId) || [])[0]);
     if(!uRoi || uRoi.x === undefined) return;
@@ -2306,18 +2308,35 @@ function construireVueGraphique(){
     if(membresColonne.length < 3) return;
     const filPremier = FILIATIONS.find(f => f.enfant === membresColonne[0].membres[0]);
     const x1 = uRoi.centreMembre[roiId];
-    const y1 = hauteurLienDeMariage(uRoi, roiId, undefined);
+    const y1 = bordsBoiteDe(uRoi, roiId).bottom; // départ court : juste sous la vignette, pas son centre
+    const gapDebut = uRoi.gen;
+    const clefVirtuelle = 'FOURCHETTE:' + roiId;
     const xSpine = membresColonne[0].x - 24; // petite colonne vertébrale juste avant les vignettes
     const points = membresColonne.map(u => {
       const id = u.membres[0];
       return { x2: u.centreMembre[id], y: u.y + VG.HAUTEUR_BOITE / 2 };
     });
     const yHaut = points[0].y, yBas = points[points.length - 1].y;
-    const yArrivee = yHaut + (yBas - yHaut) * 0.05;
+    // Essaie plusieurs hauteurs de coude, toutes proches du roi (départ
+    // court demandé), jusqu'à trouver une portion horizontale libre.
+    const xMin = Math.min(x1, xSpine), xMax = Math.max(x1, xSpine);
+    const essais = [10, 25, 45, 70, 100, 140];
+    let yCoude = y1 + essais[essais.length - 1];
+    for(const decalage of essais){
+      const essai = y1 + decalage;
+      if(!chevaucheHorizontalement(xMin, xMax, essai, gapDebut)){ yCoude = essai; break; }
+    }
+    const yHautSpine = Math.min(yCoude, yHaut);
     const incertainFourchette = !filPremier || !!(filPremier.pereIncertain || filPremier.mereIncertaine || !filPremier.pere || !filPremier.mere);
-    let d = `M ${x1} ${y1} L ${x1} ${yArrivee} L ${xSpine} ${yArrivee} M ${xSpine} ${yHaut} L ${xSpine} ${yBas}`;
+    let d = `M ${x1} ${y1} L ${x1} ${yCoude}` + segmentAvecSauts(x1, xSpine, yCoude, gapDebut, clefVirtuelle)
+      + ` M ${xSpine} ${yHautSpine} L ${xSpine} ${yBas}`;
     points.forEach(p => { d += ` M ${xSpine} ${p.y} L ${p.x2} ${p.y}`; });
     svg.appendChild(creer('path', { class: 'lien-filiation' + (incertainFourchette ? ' lien-incertain' : ''), d, fill:'none' }));
+    // Enregistrement pour que d'autres liens calculés après évitent à
+    // leur tour cette fourchette.
+    ajouterSegment(gapDebut, x1, y1, yCoude, clefVirtuelle);
+    ajouterSegmentH(gapDebut, yCoude, x1, xSpine, clefVirtuelle);
+    ajouterSegment(gapDebut, xSpine, yHautSpine, yBas, clefVirtuelle);
   });
 
   // Liens routés par la marge (portée 2+ générations, et liens promus
