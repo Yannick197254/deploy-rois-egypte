@@ -363,7 +363,7 @@ create policy "Accès complet filiations" on filiations
 
 <header class="barre-app">
   <h1>𓂀 Rois d'Égypte antique — Vue 2D</h1>
-  <span class="badge-version">v2.81</span>
+  <span class="badge-version">v2.82</span>
   <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button>
   <button id="config-gear" onclick="openConfig()">⚙ Changer de connexion</button>
   <a href="vue3d.html" style="color:var(--bleu);text-decoration:underline;font-size:12px;">🌐 Vue 3D</a>
@@ -2373,6 +2373,26 @@ function construireVueGraphique(){
         const date = creer('text', { class:'noeud-date', x: cx, y: yDate, 'text-anchor':'middle' });
         date.textContent = regneTxt;
         groupe.appendChild(date);
+      }
+      // Cartouche (image de Sesh) : uniquement pour un roi qui en a un
+      // (champ "Fichier cartouche" rempli dans la fiche). Réservé sous
+      // le nom/dates, mis à l'échelle pour tenir dans l'espace restant
+      // sans jamais déborder de la vignette (largeur ET hauteur bornées),
+      // ancré en haut de cette zone et centré horizontalement.
+      if(p.role === 'roi' && p.fichier_cartouche){
+        const zoneTop = (regneTxt ? yDate : yNom) + 10;
+        const zoneBottom = y + h - 10;
+        const zoneHauteur = zoneBottom - zoneTop;
+        const zoneLargeur = largeur - 16;
+        if(zoneHauteur > 10 && zoneLargeur > 10){
+          const img = creer('image', {
+            href: 'cartouches/' + encodeURIComponent(p.fichier_cartouche),
+            x: cx - zoneLargeur / 2, y: zoneTop,
+            width: zoneLargeur, height: zoneHauteur,
+            preserveAspectRatio: 'xMidYMin meet'
+          });
+          groupe.appendChild(img);
+        }
       }
       svg.appendChild(groupe);
     });

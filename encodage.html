@@ -528,7 +528,7 @@
 <div class="top-bar">
 <header>
   <h1>𓂀 Rois d'Égypte antique</h1>
-  <p>Interface d'encodage · v2.07 &nbsp;·&nbsp; <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button> &nbsp;·&nbsp; <button class="link-btn" onclick="openConfig()">⚙ Changer de connexion</button> &nbsp;·&nbsp; <button class="link-btn" onclick="exportToExcel()">💾 Sauvegarder en Excel</button> &nbsp;·&nbsp; <button class="link-btn" id="btn-import" onclick="document.getElementById('import-file').click()">📥 Importer depuis Excel</button> &nbsp;·&nbsp; <a class="link-btn" href="vue3d.html" style="text-decoration:underline;">🌳 Vue 3D</a> &nbsp;·&nbsp; <a class="link-btn" href="vue2d.html" style="text-decoration:underline;">📐 Vue 2D</a></p>
+  <p>Interface d'encodage · v2.08 &nbsp;·&nbsp; <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button> &nbsp;·&nbsp; <button class="link-btn" onclick="openConfig()">⚙ Changer de connexion</button> &nbsp;·&nbsp; <button class="link-btn" onclick="exportToExcel()">💾 Sauvegarder en Excel</button> &nbsp;·&nbsp; <button class="link-btn" id="btn-import" onclick="document.getElementById('import-file').click()">📥 Importer depuis Excel</button> &nbsp;·&nbsp; <a class="link-btn" href="vue3d.html" style="text-decoration:underline;">🌳 Vue 3D</a> &nbsp;·&nbsp; <a class="link-btn" href="vue2d.html" style="text-decoration:underline;">📐 Vue 2D</a></p>
   <input type="file" id="import-file" accept=".xlsx" style="display:none;" onchange="importFromExcel(this.files[0])">
 </header>
 
@@ -609,6 +609,10 @@
         <div class="field">
           <label>Prénomen</label>
           <input type="text" id="p-prenomen">
+        </div>
+        <div class="field">
+          <label>Fichier cartouche</label>
+          <input type="text" id="p-fichier_cartouche" placeholder="ex : touthmosis_1er.png">
         </div>
         <div class="field">
           <label>Début du règne</label>
@@ -1267,7 +1271,7 @@ async function exportToExcel() {
   const personnesRows = (personnes || []).map(p => ({
     id: p.id, nom_usuel: p.nom_usuel, role: p.role, sexe: p.sexe,
     dynastie: p.dynastie, nom_horus: p.nom_horus, nom_nebty: p.nom_nebty, nom_horus_or: p.nom_horus_or,
-    nomen: p.nomen, prenomen: p.prenomen, regne_debut: p.regne_debut, regne_fin: p.regne_fin,
+    nomen: p.nomen, prenomen: p.prenomen, fichier_cartouche: p.fichier_cartouche, regne_debut: p.regne_debut, regne_fin: p.regne_fin,
     age_acces_trone: p.age_acces_trone, duree_regne: p.duree_regne, ordre_succession: p.ordre_succession,
     nom_translittere: p.nom_translittere, statut_epouse: p.statut_epouse, fils_aine: p.fils_aine,
     champ_texte_1: p.champ_texte_1, champ_texte_2: p.champ_texte_2, champ_texte_3: p.champ_texte_3, champ_texte_4: p.champ_texte_4,
@@ -1350,7 +1354,7 @@ async function importFromExcel(file) {
       .map(p => ({
         id: p.id, nom_usuel: p.nom_usuel, role: p.role || 'roi', sexe: p.sexe,
         dynastie: p.dynastie, nom_horus: p.nom_horus, nom_nebty: p.nom_nebty, nom_horus_or: p.nom_horus_or,
-        nomen: p.nomen, prenomen: p.prenomen, regne_debut: p.regne_debut, regne_fin: p.regne_fin,
+        nomen: p.nomen, prenomen: p.prenomen, fichier_cartouche: p.fichier_cartouche, regne_debut: p.regne_debut, regne_fin: p.regne_fin,
         age_acces_trone: p.age_acces_trone, duree_regne: p.duree_regne,
         ordre_succession: (p.ordre_succession === '' || p.ordre_succession === undefined) ? null : p.ordre_succession,
         nom_translittere: p.nom_translittere, statut_epouse: p.statut_epouse || null,
@@ -1497,7 +1501,7 @@ function resetPersonneForm() {
   document.getElementById('personne-id').value = '';
   document.getElementById('personne-form-title').textContent = 'Ajouter une personne';
   ['nom_usuel','sexe','nom_translittere','dynastie','ordre_succession','nom_horus','nom_nebty',
-   'nom_horus_or','nomen','prenomen','regne_debut','regne_fin','age_acces_trone','duree_regne',
+   'nom_horus_or','nomen','prenomen','fichier_cartouche','regne_debut','regne_fin','age_acces_trone','duree_regne',
    'statut_epouse','champ_texte_1','champ_texte_2','champ_texte_3','champ_texte_4','commentaire',
    'fonction_1','fonction_2','fonction_3','fonction_4','fonction_5',
    'fonction_6','fonction_7','fonction_8','fonction_9','fonction_10'].forEach(f => {
@@ -1527,6 +1531,7 @@ async function savePersonne() {
     nom_horus_or: document.getElementById('p-nom_horus_or').value || null,
     nomen: document.getElementById('p-nomen').value || null,
     prenomen: document.getElementById('p-prenomen').value || null,
+    fichier_cartouche: document.getElementById('p-fichier_cartouche').value.trim() || null,
     regne_debut: document.getElementById('p-regne_debut').value || null,
     regne_fin: document.getElementById('p-regne_fin').value || null,
     age_acces_trone: document.getElementById('p-age_acces_trone').value || null,
@@ -1584,6 +1589,7 @@ function editPersonne(p) {
   document.getElementById('p-nom_horus_or').value = p.nom_horus_or || '';
   document.getElementById('p-nomen').value = p.nomen || '';
   document.getElementById('p-prenomen').value = p.prenomen || '';
+  document.getElementById('p-fichier_cartouche').value = p.fichier_cartouche || '';
   document.getElementById('p-regne_debut').value = p.regne_debut || '';
   document.getElementById('p-regne_fin').value = p.regne_fin || '';
   document.getElementById('p-age_acces_trone').value = p.age_acces_trone || '';
