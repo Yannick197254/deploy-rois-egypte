@@ -528,7 +528,7 @@
 <div class="top-bar">
 <header>
   <h1>𓂀 Rois d'Égypte antique</h1>
-  <p>Interface d'encodage · v2.08 &nbsp;·&nbsp; <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button> &nbsp;·&nbsp; <button class="link-btn" onclick="openConfig()">⚙ Changer de connexion</button> &nbsp;·&nbsp; <button class="link-btn" onclick="exportToExcel()">💾 Sauvegarder en Excel</button> &nbsp;·&nbsp; <button class="link-btn" id="btn-import" onclick="document.getElementById('import-file').click()">📥 Importer depuis Excel</button> &nbsp;·&nbsp; <a class="link-btn" href="vue3d.html" style="text-decoration:underline;">🌳 Vue 3D</a> &nbsp;·&nbsp; <a class="link-btn" href="vue2d.html" style="text-decoration:underline;">📐 Vue 2D</a></p>
+  <p>Interface d'encodage · v2.09 &nbsp;·&nbsp; <button class="link-btn" onclick="openArbres()">🌳 Mes arbres</button> &nbsp;·&nbsp; <button class="link-btn" onclick="openConfig()">⚙ Changer de connexion</button> &nbsp;·&nbsp; <button class="link-btn" onclick="exportToExcel()">💾 Sauvegarder en Excel</button> &nbsp;·&nbsp; <button class="link-btn" id="btn-import" onclick="document.getElementById('import-file').click()">📥 Importer depuis Excel</button> &nbsp;·&nbsp; <a class="link-btn" href="vue3d.html" style="text-decoration:underline;">🌳 Vue 3D</a> &nbsp;·&nbsp; <a class="link-btn" href="vue2d.html" style="text-decoration:underline;">📐 Vue 2D</a></p>
   <input type="file" id="import-file" accept=".xlsx" style="display:none;" onchange="importFromExcel(this.files[0])">
 </header>
 
@@ -647,34 +647,50 @@
 
       <datalist id="fonctions-datalist"></datalist>
       <div id="champs-fonctions" class="form-grid" style="margin-top:10px; grid-column:1/-1;">
-        <div class="field"><label>Fonction 1</label><input type="text" id="p-fonction_1" list="fonctions-datalist" placeholder="ex : Vizir"></div>
-        <div class="field"><label>Fonction 2</label><input type="text" id="p-fonction_2" list="fonctions-datalist"></div>
-        <div class="field"><label>Fonction 3</label><input type="text" id="p-fonction_3" list="fonctions-datalist"></div>
-        <div class="field"><label>Fonction 4</label><input type="text" id="p-fonction_4" list="fonctions-datalist"></div>
-        <div class="field"><label>Fonction 5</label><input type="text" id="p-fonction_5" list="fonctions-datalist"></div>
-        <div class="field"><label>Fonction 6</label><input type="text" id="p-fonction_6" list="fonctions-datalist"></div>
-        <div class="field"><label>Fonction 7</label><input type="text" id="p-fonction_7" list="fonctions-datalist"></div>
-        <div class="field"><label>Fonction 8</label><input type="text" id="p-fonction_8" list="fonctions-datalist"></div>
-        <div class="field"><label>Fonction 9</label><input type="text" id="p-fonction_9" list="fonctions-datalist"></div>
-        <div class="field"><label>Fonction 10</label><input type="text" id="p-fonction_10" list="fonctions-datalist"></div>
+        <div class="field"><label>Titre 1</label><input type="text" id="p-fonction_1" list="fonctions-datalist" placeholder="ex : Vizir"></div>
+        <div class="field"><label>Titre 2</label><input type="text" id="p-fonction_2" list="fonctions-datalist"></div>
+        <div class="field"><label>Titre 3</label><input type="text" id="p-fonction_3" list="fonctions-datalist"></div>
+        <div class="field"><label>Titre 4</label><input type="text" id="p-fonction_4" list="fonctions-datalist"></div>
+        <div class="field"><label>Titre 5</label><input type="text" id="p-fonction_5" list="fonctions-datalist"></div>
+        <div class="field"><label>Titre 6</label><input type="text" id="p-fonction_6" list="fonctions-datalist"></div>
+        <div class="field"><label>Titre 7</label><input type="text" id="p-fonction_7" list="fonctions-datalist"></div>
+        <div class="field"><label>Titre 8</label><input type="text" id="p-fonction_8" list="fonctions-datalist"></div>
+        <div class="field"><label>Titre 9</label><input type="text" id="p-fonction_9" list="fonctions-datalist"></div>
+        <div class="field"><label>Titre 10</label><input type="text" id="p-fonction_10" list="fonctions-datalist"></div>
       </div>
 
       <div id="champs-secondaires" class="form-grid" style="margin-top:10px;">
         <div class="field">
-          <label>Champ libre 1</label>
+          <label>Attestation 1</label>
           <input type="text" id="p-champ_texte_1">
         </div>
         <div class="field">
-          <label>Champ libre 2</label>
+          <label>Attestation 2</label>
           <input type="text" id="p-champ_texte_2">
         </div>
         <div class="field">
-          <label>Champ libre 3</label>
+          <label>Attestation 3</label>
           <input type="text" id="p-champ_texte_3">
         </div>
         <div class="field">
-          <label>Champ libre 4</label>
+          <label>Attestation 4</label>
           <input type="text" id="p-champ_texte_4">
+        </div>
+        <div class="field">
+          <label>Attestation 5</label>
+          <input type="text" id="p-champ_texte_5">
+        </div>
+        <div class="field">
+          <label>Attestation 6</label>
+          <input type="text" id="p-champ_texte_6">
+        </div>
+        <div class="field">
+          <label>Attestation 7</label>
+          <input type="text" id="p-champ_texte_7">
+        </div>
+        <div class="field">
+          <label>Attestation 8</label>
+          <input type="text" id="p-champ_texte_8">
         </div>
       </div>
 
@@ -1275,6 +1291,7 @@ async function exportToExcel() {
     age_acces_trone: p.age_acces_trone, duree_regne: p.duree_regne, ordre_succession: p.ordre_succession,
     nom_translittere: p.nom_translittere, statut_epouse: p.statut_epouse, fils_aine: p.fils_aine,
     champ_texte_1: p.champ_texte_1, champ_texte_2: p.champ_texte_2, champ_texte_3: p.champ_texte_3, champ_texte_4: p.champ_texte_4,
+    champ_texte_5: p.champ_texte_5, champ_texte_6: p.champ_texte_6, champ_texte_7: p.champ_texte_7, champ_texte_8: p.champ_texte_8,
     commentaire: p.commentaire,
     fonction_1: p.fonction_1, fonction_2: p.fonction_2, fonction_3: p.fonction_3, fonction_4: p.fonction_4, fonction_5: p.fonction_5,
     fonction_6: p.fonction_6, fonction_7: p.fonction_7, fonction_8: p.fonction_8, fonction_9: p.fonction_9, fonction_10: p.fonction_10
@@ -1360,6 +1377,7 @@ async function importFromExcel(file) {
         nom_translittere: p.nom_translittere, statut_epouse: p.statut_epouse || null,
         fils_aine: estVrai(p.fils_aine),
         champ_texte_1: p.champ_texte_1, champ_texte_2: p.champ_texte_2, champ_texte_3: p.champ_texte_3, champ_texte_4: p.champ_texte_4,
+        champ_texte_5: p.champ_texte_5, champ_texte_6: p.champ_texte_6, champ_texte_7: p.champ_texte_7, champ_texte_8: p.champ_texte_8,
         commentaire: p.commentaire,
         fonction_1: p.fonction_1, fonction_2: p.fonction_2, fonction_3: p.fonction_3, fonction_4: p.fonction_4, fonction_5: p.fonction_5,
         fonction_6: p.fonction_6, fonction_7: p.fonction_7, fonction_8: p.fonction_8, fonction_9: p.fonction_9, fonction_10: p.fonction_10,
@@ -1502,7 +1520,8 @@ function resetPersonneForm() {
   document.getElementById('personne-form-title').textContent = 'Ajouter une personne';
   ['nom_usuel','sexe','nom_translittere','dynastie','ordre_succession','nom_horus','nom_nebty',
    'nom_horus_or','nomen','prenomen','fichier_cartouche','regne_debut','regne_fin','age_acces_trone','duree_regne',
-   'statut_epouse','champ_texte_1','champ_texte_2','champ_texte_3','champ_texte_4','commentaire',
+   'statut_epouse','champ_texte_1','champ_texte_2','champ_texte_3','champ_texte_4',
+   'champ_texte_5','champ_texte_6','champ_texte_7','champ_texte_8','commentaire',
    'fonction_1','fonction_2','fonction_3','fonction_4','fonction_5',
    'fonction_6','fonction_7','fonction_8','fonction_9','fonction_10'].forEach(f => {
     const el = document.getElementById('p-' + f);
@@ -1541,6 +1560,10 @@ async function savePersonne() {
     champ_texte_2: document.getElementById('p-champ_texte_2').value || null,
     champ_texte_3: document.getElementById('p-champ_texte_3').value || null,
     champ_texte_4: document.getElementById('p-champ_texte_4').value || null,
+    champ_texte_5: document.getElementById('p-champ_texte_5').value || null,
+    champ_texte_6: document.getElementById('p-champ_texte_6').value || null,
+    champ_texte_7: document.getElementById('p-champ_texte_7').value || null,
+    champ_texte_8: document.getElementById('p-champ_texte_8').value || null,
     commentaire: document.getElementById('p-commentaire').value || null,
     fonction_1: document.getElementById('p-fonction_1').value.trim() || null,
     fonction_2: document.getElementById('p-fonction_2').value.trim() || null,
@@ -1599,6 +1622,10 @@ function editPersonne(p) {
   document.getElementById('p-champ_texte_2').value = p.champ_texte_2 || '';
   document.getElementById('p-champ_texte_3').value = p.champ_texte_3 || '';
   document.getElementById('p-champ_texte_4').value = p.champ_texte_4 || '';
+  document.getElementById('p-champ_texte_5').value = p.champ_texte_5 || '';
+  document.getElementById('p-champ_texte_6').value = p.champ_texte_6 || '';
+  document.getElementById('p-champ_texte_7').value = p.champ_texte_7 || '';
+  document.getElementById('p-champ_texte_8').value = p.champ_texte_8 || '';
   document.getElementById('p-commentaire').value = p.commentaire || '';
   for (let n = 1; n <= 10; n++) {
     document.getElementById('p-fonction_' + n).value = p['fonction_' + n] || '';
